@@ -1,0 +1,16 @@
+
+old/
+
+log/
+
+torrents/
+
+__pycache__/
+
+.idea/
+
+sql/dump-anibase-202002270319.sql
+
+spam/
+
+config.py
