@@ -1,4 +1,3 @@
-# todo implement sync on schedule
 # get anime info, including by shortname
 # get user lists
 # get season lists

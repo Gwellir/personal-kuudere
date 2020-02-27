@@ -4,8 +4,9 @@ import config
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler)
 from telegram import (ParseMode, InlineQueryResultCachedMpeg4Gif, InlineKeyboardMarkup, InlineKeyboardButton)
 from telegram.utils.helpers import mention_html
-# animeinfo service wrappers
+# service wrappers
 from jikanpy import Jikan
+from saucenao import SauceNao
 # additional utilities
 import logging
 import sys
@@ -140,6 +141,14 @@ def torrents_stats(update, context):
                                                  'order by a.title')])
     # print(torrents)
     msg = f'Список отслеживаемых торрентов:\n{torrents}'
+    context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
+                             disable_web_page_preview=True)
+
+
+def show_lockouts(update, context):
+    lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]} (до {t[2]})'
+                          for t in ani_db.select('*', 'lockout')])
+    msg = f'<b>Запрещены спойлеры по</b>:\n\n{lockouts}'
     context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                              disable_web_page_preview=True)
 
@@ -334,6 +343,31 @@ def show_anime(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
                              parse_mode=ParseMode.HTML)
     sleep(2)
+
+
+def ask_saucenao(update, context):
+    photo_file_id = update.effective_message.photo[-1].file_id
+    if photo_file_id:
+        file = context.bot.get_file(file_id=photo_file_id)
+        name = f'{str(uuid.uuid4())}.jpg'
+        file.download(f'img/{name}')
+        saucenao = SauceNao(directory='img', databases=999, minimum_similarity=65, combine_api_types=False,
+                            api_key=config.saucenao_token, is_premium=False, exclude_categories='',
+                            move_to_categories=False,
+                            use_author_as_category=False, output_type=SauceNao.API_HTML_TYPE, start_file='',
+                            log_level=logging.ERROR, title_minimum_similarity=90)
+        filtered_results = saucenao.check_file(file_name=name)
+        pprint(filtered_results)
+        sep = '\n'
+        results = [f"{entry['data']['title']}\n{sep.join(entry['data']['content'])}"
+                   f"Similarity: {entry['header']['similarity']}\n{sep.join(entry['data']['ext_urls'])}"
+                   for entry in filtered_results if entry['data']['ext_urls']]  #
+        if not results:
+            update.effective_message.reply_text('Похожих изображений не найдено!')
+            return
+        for res in results:
+            msg = f'<b>Найдено:</b>\n' + res
+            context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
 
 
 # todo identification by filename and size
@@ -553,7 +587,7 @@ dispatcher = updater.dispatcher
 job_feeds = jobs.run_repeating(update_nyaa, interval=600, first=0)
 announce_time = datetime.strptime("14:01", "%H:%M").time()
 job_show_digest = jobs.run_daily(show_daily_events, announce_time)
-list_update_time = datetime.strptime("01:29", "%H:%M").time()
+list_update_time = datetime.strptime("04:30", "%H:%M").time()
 job_update_lists = jobs.run_daily(update_lists, list_update_time)
 
 
@@ -575,6 +609,7 @@ dispatcher.add_handler(InlineQueryHandler(inline_query))
 
 dispatcher.add_handler(CommandHandler('torrents', torrents_stats))
 dispatcher.add_handler(CommandHandler('stats', show_stats))
+dispatcher.add_handler(CommandHandler('lockout', show_lockouts))
 
 dispatcher.add_handler(MessageHandler(Filters.chat(chat_id=config.main_chat), do_nothing))
 
@@ -583,6 +618,7 @@ dispatcher.add_handler(CommandHandler(['reg', 'register'], register_user))
 dispatcher.add_handler(CommandHandler('track', track_anime))
 dispatcher.add_handler(CommandHandler('drop', drop_anime))
 
+dispatcher.add_handler(MessageHandler(Filters.photo, ask_saucenao))
 # todo catch tags in gif caption
 dispatcher.add_handler(MessageHandler(Filters.document.gif, do_nothing))
 
@@ -598,6 +634,7 @@ dispatcher.add_handler(CommandHandler('force_deliver', force_deliver))
 dispatcher.add_handler(CommandHandler('send_last', deliver_last))
 
 dispatcher.add_handler(CommandHandler('users', users_stats))
+# dispatcher.add_handler(CommandHandler(['sauce', 'source'], ask_saucenao))
 
 dispatcher.add_handler(CallbackQueryHandler(process_callbacks))
 
