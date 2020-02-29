@@ -171,7 +171,7 @@ class ListImporter:
         # userlist_mal = [('unambo', None)]
         for user_entry in userlist_mal:
             user = self.jikan.user(username=user_entry[0])
-            pprint(user)
+            # pprint(user)
             sleep(2)
             print(user['username'], '-> got profile data')
             if not user_entry[1]:

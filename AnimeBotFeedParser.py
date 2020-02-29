@@ -10,7 +10,7 @@ from time import sleep
 from collections import Counter
 import requests
 from pytz import timezone
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def title_compare(variants, title):
@@ -47,9 +47,9 @@ class TorrentFeedParser:
         self.jikan = Jikan()
         self.ani_db = DBInterface()
 
-    def article_not_in_db(self, a_title, a_date):
-        article = self.ani_db.select('*', 'anifeeds', 'title = %s AND date = %s', [a_title, a_date], quiet=True)
-        return not article
+    # def article_not_in_db(self, a_title, a_date):
+    #     article = self.ani_db.select('*', 'anifeeds', 'title = %s AND date = %s', [a_title, a_date], quiet=True)
+    #     return not article
 
     def add_to_db(self, a_title, a_date, a_link, a_description):
         # do_recognize(a_title)
@@ -57,26 +57,51 @@ class TorrentFeedParser:
                                     "VALUES (%s,%s,%s,%s)", (a_title, a_date, a_link, a_description))
         self.ani_db.commit()
 
-    # todo checking for overlap (and then scraping?)
+    def get_last_entry(self):
+        last_entry = self.ani_db.select('date, title', 'anifeeds', 'TRUE order by date desc limit %s', [1])
+        self.ani_db.commit()
+        return last_entry
+
+    def get_local_time(self, dtime):
+        dt_utc = datetime(*dtime[0:6])
+        return dt_utc.astimezone(timezone('Europe/Moscow'))
+
+    # todo scraping if no overlap?
+    # todo SET TIMEZONES
     def read_article_feed(self, feed):
         feed = feedparser.parse(feed)
-        for article in feed['entries']:
-            dt = article.published
-            dt_utc = datetime.strptime(dt, self.nyaa_time_fmt)
-            dt_local = dt_utc.astimezone(timezone('Europe/Moscow'))
-            if self.article_not_in_db(article['title'], str(dt_local)[:19]):
-                self.add_to_db(article['title'], str(dt_local)[:19], article['link'], article['description'])
-                print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
+        last_entry = self.get_last_entry()
+        d_3h = timedelta(hours=3)
+        last_time = (last_entry[0][0] - d_3h).astimezone(timezone('Europe/Moscow'))
+        last_title = last_entry[0][1]
+        # pprint(last_time)
+        # pprint(self.get_local_time(feed['entries'][0]['published_parsed']))
+        if not last_entry:
+            entries = [entry for entry in feed['entries']]
+        else:
+            entries = [entry for entry in feed['entries']
+                       if self.get_local_time(entry.published_parsed) > last_time
+                       or (self.get_local_time(entry.published_parsed) == last_time
+                           and entry['title'] != last_title)]
+        entries.reverse()
+        # pprint(entries)
+        for article in entries:
+            # todo suboptimal - calculating these twice
+            dt = article.published_parsed
+            dt_local = self.get_local_time(dt)
+            self.add_to_db(article['title'], str(dt_local + d_3h)[:19], article['link'], article['description'])
+            print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
 
     def check_feeds(self):
         for f in self.MY_FEEDS:
             self.read_article_feed(f)
-        a_list = self.ani_db.select('*', 'anifeeds', 'checked = %s', [0])
+        a_list = self.ani_db.select('*', 'anifeeds', 'checked = %s order by date', [0])
         for anime in a_list:
             self.do_recognize(anime[0], anime[2], parse_size(anime[3]))  # just use a fucking hash as torrent identity
         self.ani_db.commit()
         self.ani_db.close()
 
+    # todo avoid accidentally hitting column limits
     # todo version parsing
     def do_recognize(self, a_title, t_link, f_size):
         save_title = a_title

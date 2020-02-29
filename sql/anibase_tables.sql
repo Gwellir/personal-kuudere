@@ -10,12 +10,14 @@ CREATE TABLE users (
 	mal_nick varchar(50) NOT NULL,
 	mal_uid BIGINT UNSIGNED NOT NULL UNIQUE KEY,
 	preferred_res INT UNSIGNED DEFAULT 720,
+	service ENUM('MAL', 'Anilist'),
 		
 	INDEX users_idx(tg_nick),
 	INDEX mal_idx(mal_nick)
 );
 
 -- ALTER TABLE anibase.users ADD id SERIAL;
+-- ALTER TABLE anibase.users ADD service ENUM('MAL', 'Anilist');
 
 DROP TABLE IF EXISTS anime;
 CREATE TABLE anime (

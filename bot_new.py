@@ -20,9 +20,9 @@ from datetime import datetime
 from pytz import timezone
 # my classes
 from AnimeBotDBWrapper import DBInterface
-from EntityData import AnimeEntry
+from AnimeBotEntityData import AnimeEntry
 from AnimeBotFeedParser import TorrentFeedParser
-from AnimeListParser import ListImporter
+from AnimeBotListParser import ListImporter
 
 
 PRIORITY_GROUPS = ['HorribleSubs', 'Erai-raws']
