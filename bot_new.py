@@ -105,15 +105,13 @@ def quote_set(update, context):
 
 
 def show_stats(update, context):
-    watched = ani_db.select('a.title, ut.mal_aid, count(ut.mal_aid)',
-                            'users_x_tracked ut JOIN anime a ON a.mal_aid = ut.mal_aid '
-                            'GROUP BY ut.mal_aid ORDER BY count(ut.mal_aid) desc, a.score desc')
+    watched = ani_db.select('*', 'full_tracking')
     total = ani_db.select('count(mal_aid)', 'ongoings')
     active_users_count = ani_db.select('count(tg_id)', 'users')
-    # torrents_recognized = ani_db.select('count(distinct mal_aid)', 'anifeeds')
-    watched_str = 'Топ-10 отслеживаемых:\n' +\
+    stats_limit = 15
+    watched_str = f'Топ-{stats_limit} отслеживаемых:\n' +\
                   '\n'.join([f'{t[2]:>2}: <a href="https://myanimelist.net/anime/{t[1]}">{t[0]}</a>'
-                             for t in watched][:10]) + '\n\n'
+                             for t in watched][:stats_limit]) + '\n\n'
     msg = (watched_str if watched else '') + f'Всего онгоингов отслеживается: {total[0][0]}.\n'\
                                              f'Зарегистрированных пользователей: {active_users_count[0][0]}.\n'
     context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
@@ -221,7 +219,7 @@ def torrent_unsubscribe(uid, aid):
     return True
 
 
-# todo inline keyboard builder shoudn't be here
+# todo inline keyboard builder shouldn't be here
 def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
     menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
     if header_buttons:
@@ -320,8 +318,14 @@ def store_anime(a_entry):
                                 a_entry.synopsis, a_entry.type,
                                 a_entry.aired['from'][:10] if a_entry.aired['from'] else None,
                                 a_entry.aired['to'][:10] if a_entry.aired['to'] else None,
-                                None, None, a_entry.episodes, a_entry.image_url, a_entry.score, a_entry.status
+                                None, None, a_entry.episodes, a_entry.image_url, a_entry.score, a_entry.status,
                                 ))
+        ani_db.commit()
+    elif local_entry and not local_entry[0][2]:
+        ani_db.update('anime', "title_eng = %s, title_jap = %s, ended_at = %s, status = %s",
+                      [a_entry.title_english, a_entry.title_japanese,
+                       a_entry.aired['to'][:10] if a_entry.aired['to'] else None, a_entry.status],
+                      'mal_aid = %s', [a_entry.mal_id])
         ani_db.commit()
 
 
@@ -562,9 +566,10 @@ def deliver_last(tg_id):
 
 
 # todo better way of handling episode number update
+# todo now pending_delivery runs on shitty fallback logic, fix ASAP
 def deliver_torrents():
-    entries = ani_db.select('*', 'pending_delivery')  # this is a view
     ani_db.commit()
+    entries = ani_db.select('*', 'pending_delivery')  # this is a view
     for entry in entries:
         updater.bot.send_document(chat_id=entry[0], document=open(entry[1], 'rb'),
                                   caption=entry[1].rsplit('/', 1)[1])
@@ -574,7 +579,7 @@ def deliver_torrents():
         ani_db.commit()
 
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='log/tgbot.log',
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # filename='log/tgbot.log',
                     level=logging.INFO)
 
 ani_db = DBInterface()

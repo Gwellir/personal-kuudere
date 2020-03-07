@@ -84,7 +84,7 @@ class ListImporter:
                 variables = {
                     'username': user,
                     'page': curr_page,
-                    'perPage': 50
+                    'perPage': 50,
                 }
                 try:
                     response = requests.post(AL_URL, json={'query': AL_LIST_QUERY, 'variables': variables})
@@ -95,14 +95,14 @@ class ListImporter:
                     airing_status_dict = {
                         'FINISHED': 2,
                         'RELEASING': 1,
-                        'NOT_YET_RELEASED': 3
+                        'NOT_YET_RELEASED': 3,
                     }
                     user_status_dict = {
                         'CURRENT': 1,
                         'COMPLETED': 2,
                         'PAUSED': 3,
                         'DROPPED': 4,
-                        'PLANNING': 6
+                        'PLANNING': 6,
                     }
                     mal_adapted = [{
                         'mal_id': item['media']['idMal'],
@@ -112,7 +112,7 @@ class ListImporter:
                         'watched_episodes': item['progress'],
                         'total_episodes': item['media']['episodes'],
                         'score': item['score'],
-                        'airing_status': airing_status_dict[item['media']['status']]
+                        'airing_status': airing_status_dict[item['media']['status']],
                     } for item in page_info]
                     anime_list += mal_adapted
                     has_next = answer['data']['Page']['pageInfo']['hasNextPage']
@@ -166,9 +166,11 @@ class ListImporter:
         print(len(anime_list), 'items received.')
         return anime_list
 
-    def update_mal_list_status(self):
-        userlist_mal = self.ani_db.select('mal_nick, mal_uid', 'users', 'service = %s', ['MAL'])
-        # userlist_mal = [('unambo', None)]
+    def update_mal_list_status(self, nick=None):
+        if not nick:
+            userlist_mal = self.ani_db.select('mal_nick, mal_uid', 'users', 'service = %s', ['MAL'])
+        else:
+            userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
             user = self.jikan.user(username=user_entry[0])
             # pprint(user)
@@ -215,7 +217,9 @@ class ListImporter:
 
 if __name__ == '__main__':
     li = ListImporter()
-    li.update_all()
+    # li.update_mal_list_status('Otakon273')
+    # li.update_all()
+    li.get_anime_season_mal()
 
 # get_animelist_mal(('unambo'), None)
 # season_list = get_anime_season(2020, 'winter')

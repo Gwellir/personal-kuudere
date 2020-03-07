@@ -118,19 +118,6 @@ class DBInterface(object):
         query = f"DELETE FROM {table_name} where {pattern}"
         print('SQL>', query % tuple(p_values))
         self._cursor.execute(query, tuple(p_values))
- 
-    def get_min_id(self, table_name):
-        min_id = self.select('MIN(ID)', table_name, None)
-        if min_id:
-            return min_id[0][0]
-        return min_id
-
-    def get_max_id(self, table_name):
-        max_id = self.select('MAX(ID)', table_name, None)
-        if max_id:
-            return max_id[0][0]
-        else:
-            return None
 
     def commit(self):
         self.__conn.commit()

@@ -13,6 +13,13 @@ from pytz import timezone
 from datetime import datetime, timedelta
 
 
+CATCH_360 = ['360p']
+CATCH_480 = ['480p', '720x480']
+CATCH_720 = ['720p', '1280x720']
+CATCH_1080 = ['1080p', '1920x1080']
+
+
+# todo well, this is a piece of shit
 def title_compare(variants, title):
     t = Counter(title.lower())
     # min_sum = sum(t.values())
@@ -35,12 +42,59 @@ def parse_size(desc):
     return size
 
 
+def get_resolution_from_params(params):
+    resolution = None
+    if [x for x in CATCH_720 if x in [p.lower() for p in params]]:
+        resolution = 720
+    elif [x for x in CATCH_1080 if x in [p.lower() for p in params]]:
+        resolution = 1080
+    elif [x for x in CATCH_480 if x in [p.lower() for p in params]]\
+            or [x for x in CATCH_360 if x in [p.lower() for p in params]]:
+        resolution = 480
+    return resolution
+
+
+def parse_feed_title(a_title):
+    re_fa = re.findall(r'\[(.*?)\]', a_title)
+    a_ext = a_ep_no = a_group = None
+    group_not_found = True
+    params = []
+    if re_fa:
+        a_group = re_fa[0]
+        group_not_found = False
+        for match in re_fa:
+            params.extend(match.split(' '))
+            a_title = str.replace(a_title, f'[{match}]', '').strip()
+    re_fa = re.findall(r'\((.*?)\)', a_title)
+    if re_fa:
+        if group_not_found:
+            a_group = re_fa[0]
+        for match in re_fa:
+            params.extend(match.split(' '))
+            a_title = str.replace(a_title, f'({match})', '').strip()
+    print(f'{Fore.BLUE}{params}{Style.RESET_ALL}')
+    a_res = get_resolution_from_params(params)
+    re_ext = re.match(r'.*\.(\w+)$', a_title)
+    if re_ext:
+        a_ext = re_ext.group(1)
+        a_title = str.replace(a_title, f'.{a_ext}', '').strip()
+    re_ep_no = re.match(r'.*((?P<season>S\d+)E|- |episode )(\d+).*', a_title)
+    if re_ep_no:
+        a_ep_no = re_ep_no.group(3)
+        a_title = a_title[:a_title.find(f'{re_ep_no.group(1)}{re_ep_no.group(3)}')]
+        if re_ep_no.group('season'):
+            a_title += re_ep_no.group('season')
+        a_title = a_title.strip()
+    return a_ep_no, a_group, a_title, a_res, a_ext
+
+
+def get_local_time(dtime):
+    dt_utc = datetime(*dtime[0:6])
+    return dt_utc.astimezone(timezone('Europe/Moscow'))
+
+
 class TorrentFeedParser:
     MY_FEEDS = ['https://nyaa.si/?page=rss&c=1_2&f=0']
-    CATCH_360 = ['360p']
-    CATCH_480 = ['480p', '720x480']
-    CATCH_720 = ['720p', '1280x720']
-    CATCH_1080 = ['1080p', '1920x1080']
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
     def __init__(self):
@@ -62,10 +116,6 @@ class TorrentFeedParser:
         self.ani_db.commit()
         return last_entry
 
-    def get_local_time(self, dtime):
-        dt_utc = datetime(*dtime[0:6])
-        return dt_utc.astimezone(timezone('Europe/Moscow'))
-
     # todo scraping if no overlap?
     # todo SET TIMEZONES
     def read_article_feed(self, feed):
@@ -80,15 +130,15 @@ class TorrentFeedParser:
             entries = [entry for entry in feed['entries']]
         else:
             entries = [entry for entry in feed['entries']
-                       if self.get_local_time(entry.published_parsed) > last_time
-                       or (self.get_local_time(entry.published_parsed) == last_time
+                       if get_local_time(entry.published_parsed) > last_time
+                       or (get_local_time(entry.published_parsed) == last_time
                            and entry['title'] != last_title)]
         entries.reverse()
         # pprint(entries)
         for article in entries:
             # todo suboptimal - calculating these twice
             dt = article.published_parsed
-            dt_local = self.get_local_time(dt)
+            dt_local = get_local_time(dt)
             self.add_to_db(article['title'], str(dt_local + d_3h)[:19], article['link'], article['description'])
             print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
 
@@ -101,54 +151,12 @@ class TorrentFeedParser:
         self.ani_db.commit()
         self.ani_db.close()
 
-    # todo avoid accidentally hitting column limits
-    # todo version parsing
+    # todo fix parentheses adding spare spaces to recognized title name
+    # todo avoid accidentally hitting SQL VARCHAR column size limits
+    # todo version/recap parsing
     def do_recognize(self, a_title, t_link, f_size):
         save_title = a_title
-        re_fa = re.findall(r'\[(.*?)\]', a_title)
-        a_res = a_ext = a_ep_no = a_group = None
-        # print('>', a_title)
-        group_not_found = True
-        params = []
-        if re_fa:
-            a_group = re_fa[0]
-            group_not_found = False
-            for match in re_fa:
-                # print(match)
-                params.extend(match.split(' '))
-                a_title = str.replace(a_title, f'[{match}]', '').strip()
-        re_fa = re.findall(r'\((.*?)\)', a_title)
-        # print('>>', a_title)
-        if re_fa:
-            if group_not_found:
-                a_group = re_fa[0]
-            for match in re_fa:
-                params.extend(match.split(' '))
-                # print(match)
-                a_title = str.replace(a_title, f'({match})', '').strip()
-        print(f'{Fore.BLUE}{params}{Style.RESET_ALL}')
-        if [x for x in self.CATCH_720 if x in [p.lower() for p in params]]:
-            a_res = 720
-        elif [x for x in self.CATCH_1080 if x in [p.lower() for p in params]]:
-            a_res = 1080
-        elif [x for x in self.CATCH_480 if x in [p.lower() for p in params]]\
-                or [x for x in self.CATCH_360 if x in [p.lower() for p in params]]:
-            a_res = 480
-        # elif [x for x in self.CATCH_360 if x in params]:
-        #     a_res = 360
-        # print('>>>', a_title)
-        re_ext = re.match(r'.*\.(\w+)$', a_title)
-        if re_ext:
-            a_ext = re_ext.group(1)
-            a_title = str.replace(a_title, f'.{a_ext}', '').strip()
-            # print(a_title)
-        re_ep_no = re.match(r'.*((?P<season>S\d+)E|- |episode )(\d+).*', a_title)
-        if re_ep_no:
-            a_ep_no = re_ep_no.group(3)
-            a_title = a_title[:a_title.find(f'{re_ep_no.group(1)}{re_ep_no.group(3)}')]
-            if re_ep_no.group('season'):
-                a_title += re_ep_no.group('season')
-            a_title = a_title.strip()
+        a_ep_no, a_group, a_title, a_res, a_ext = parse_feed_title(a_title)
         if a_ep_no and a_group and a_title:
             print(f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
                   f' ext ({a_ext if a_ext else "n/a"})')
@@ -196,7 +204,7 @@ class TorrentFeedParser:
                                [mal_id, a_group, a_res, int(a_ep_no), f_size, 1], 'title = %s', [save_title])
             self.ani_db.commit()
             if mal_id:
-                self.torrent_save(mal_id, a_group, a_ep_no, t_link, a_title.replace('|', ''), a_res, f_size)
+                self.torrent_save(mal_id, a_group, a_ep_no, t_link, a_title, a_res, f_size)
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
             self.ani_db.update('anifeeds', 'checked = %s, size = %s', [1, f_size], 'title = %s', [save_title])
@@ -206,6 +214,7 @@ class TorrentFeedParser:
     # todo implement actual check for files which failed to download
     def torrent_save(self, mal_id, group, episode, link, title, res, size):
         is_downloaded = False
+        title = re.sub(r'[|/\\?:<>]', ' ', title)
         url = link
         r = requests.get(url)
         filename = f'torrents/[{group}] {title} - {episode:0>2}' + (f' [{res}p]' if res else '') + f' [{size} MiB].torrent'

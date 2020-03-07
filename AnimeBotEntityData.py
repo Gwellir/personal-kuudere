@@ -50,8 +50,8 @@ class AnimeEntry(namedtuple('AnimeEntry',
         return self.anime_template % (self.title, self.type, self.status, self.episodes if self.episodes else 'n/a',
                                       self.aired['from'][:10],
                                       self.aired['to'][:10] if self.aired['to'] else '...', self.score, self.image_url,
-                                      self.synopsis[:500] + (' &lt;...&gt;' if len(self.synopsis) > 500 else ''),
-                                      self.url,)
+                                      (self.synopsis[:500] + (' &lt;...&gt;' if len(self.synopsis) > 500 else ''))
+                                      if self.synopsis else '[No synopsis available.]', self.url,)
 
 def synopsys_prep(synopsis):
     # text = html.unescape(bb_re.sub(r'<\1>', removal_patterns.sub('', synopsis, re.M), re.M))
