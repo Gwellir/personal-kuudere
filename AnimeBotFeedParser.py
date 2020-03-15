@@ -107,8 +107,12 @@ class TorrentFeedParser:
 
     def add_to_db(self, a_title, a_date, a_link, a_description):
         # do_recognize(a_title)
-        self.ani_db._cursor.execute("INSERT into anifeeds (title, date, link, description)"
-                                    "VALUES (%s,%s,%s,%s)", (a_title, a_date, a_link, a_description))
+        if not self.ani_db.select('*', 'anifeeds', 'title = %s and date = %s', [a_title, a_date]):
+            self.ani_db._cursor.execute("INSERT into anifeeds (title, date, link, description)"
+                                        "VALUES (%s,%s,%s,%s)", (a_title, a_date, a_link, a_description))
+        else:
+            self.ani_db.update('anifeeds', 'link = %s, description = %s',
+                               [a_link, a_description], 'title = %s and date = %s', [a_title, a_date])
         self.ani_db.commit()
 
     def get_last_entry(self):
@@ -139,7 +143,8 @@ class TorrentFeedParser:
             # todo suboptimal - calculating these twice
             dt = article.published_parsed
             dt_local = get_local_time(dt)
-            self.add_to_db(article['title'], str(dt_local + d_3h)[:19], article['link'], article['description'])
+            dt_repr = str(dt_local + d_3h)[:19]
+            self.add_to_db(article['title'], dt_repr, article['link'], article['description'])
             print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
 
     def check_feeds(self):
