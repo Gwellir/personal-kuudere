@@ -151,6 +151,28 @@ def show_lockouts(update, context):
                              disable_web_page_preview=True)
 
 
+def show_user_info(update, context):
+    reply = update.effective_message.reply_to_message
+    if reply:
+        uid, nick = reply.from_user.id,\
+                    reply.from_user.username if reply.from_user.username else reply.from_user.first_name
+    else:
+        uid, nick = update.effective_user.id, update.effective_user.username
+
+    user_list = ani_db.select('mal_nick, service', 'users', 'tg_id = %s', [uid])
+    if not user_list:
+        update.effective_message.reply_text(f'Cписок пользователя {nick} не зарегистрирован.')
+        return
+    list_prefixes = {
+        'MAL': 'https://myanimelist.net/animelist/%s',
+        'Anilist': 'https://anilist.co/user/%s/animelist'
+    }
+    list_link = list_prefixes[user_list[0][1]] % user_list[0][0]
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=f'Зарегистрированный список пользователя {nick}:\n{list_link}')
+
+
+
 # todo integrate mal search
 # todo add buttons for alt titles
 def users_seen_anime(update, context):
@@ -580,7 +602,7 @@ def deliver_torrents():
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # filename='log/tgbot.log',
-                    level=logging.INFO)
+                    level=logging.DEBUG)
 
 ani_db = DBInterface()
 jikan = Jikan()
@@ -604,6 +626,7 @@ dispatcher.add_handler(CommandHandler(['start', 'help'], start))
 
 dispatcher.add_handler(CommandHandler('seen', users_seen_anime))
 dispatcher.add_handler(CommandHandler('anime', show_anime))
+dispatcher.add_handler(CommandHandler('user_info', show_user_info))
 # dispatcher.add_handler(CommandHandler('manga', show_manga))
 
 dispatcher.add_handler(CommandHandler(['gif_tag', 'tag'], gif_tags))
