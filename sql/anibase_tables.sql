@@ -44,6 +44,45 @@ CREATE TABLE anime (
 	-- FOREIGN KEY (mal_aid) REFERENCES list_status(mal_aid)
 );
 
+DROP TABLE IF EXISTS anime_full;
+CREATE TABLE anime_full (
+	aired_from datetime,
+	aired_to datetime,
+	airing BOOLEAN,
+	background TEXT,
+	broadcast VARCHAR(50),
+	duration SMALLINT UNSIGNED,
+	episodes SMALLINT UNSIGNED,
+	favorites INT UNSIGNED,
+	image_url VARCHAR(100),
+	mal_aid BIGINT UNSIGNED PRIMARY KEY,
+	members INT UNSIGNED,
+	popularity INT UNSIGNED,
+	premiered VARCHAR(50),
+	`rank` INT UNSIGNED,
+	rating VARCHAR(30),
+	score FLOAT UNSIGNED,
+	scored_by INT UNSIGNED,
+	source VARCHAR(30),
+	status VARCHAR(30),
+	synopsis TEXT, 
+	title VARCHAR(255) NOT NULL,
+	title_english VARCHAR(255),
+	title_japanese VARCHAR(255),
+	trailer_url VARCHAR(100),
+	show_type ENUM ('TV', 'Movie', 'OVA', 'Special', 'ONA', 'Music', 'Other'),
+	url VARCHAR(100),
+	
+	INDEX anime_f_idx(title),
+	INDEX score_f_idx(score),
+	INDEX rank_f_idx(`rank`),
+	INDEX pop_f_idx(members),
+	INDEX id_f_idx(mal_aid),
+	INDEX start_f_idx(aired_from),
+	INDEX end_f_idx(aired_to),
+	INDEX season_f_idx(premiered)
+);
+
 DROP TABLE IF EXISTS list_status;
 CREATE TABLE list_status (
 	user_id BIGINT UNSIGNED NOT NULL,
