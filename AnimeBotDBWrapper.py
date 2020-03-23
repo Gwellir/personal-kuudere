@@ -15,6 +15,7 @@ class DBInterface(object):
         self.db_name = config.DB.db_name
         self._cursor = self.__conn.cursor()
         self._cursor.execute("SET NAMES utf8mb4;")
+        self.anime_ids = set([entry[0] for entry in self.select('mal_aid', 'anime')])
 
     def create_if_not_exists(self, table_name, fields,
                              params="ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"):
@@ -53,6 +54,13 @@ class DBInterface(object):
             values (%s,%s)
             """.format(table=table_name), producer_tuples)
 
+    def add_licensors(self, licensor_list, table_name='licensors'):
+        licensor_tuples = [(licensor,) for licensor in licensor_list]
+        self._cursor.executemany("""
+            insert into {table} (name)
+            values (%s)
+            """.format(table=table_name), licensor_tuples)
+
     def add_animelist(self, mal_uid, anime_list, table_name='list_status'):
         anime_tuples = [(mal_uid, anime['mal_id'], anime['title'], anime['type'], anime['watching_status'],
                          anime['watched_episodes'], anime['total_episodes'], anime['score'],
@@ -63,10 +71,13 @@ class DBInterface(object):
             """.format(table=table_name), anime_tuples)
 
     def add_anime(self, anime_list, table_name='anime'):
-        anime_tuples = [(anime['mal_id'], anime['title'], anime['synopsis'], anime['type'],
+        anime_tuples = [(anime['mal_id'], anime['title'], anime['synopsis'],
+                         anime['type'] if (anime['type'] != '-') else 'Unknown',
                          anime['airing_start'][:10] + ' ' +
                          anime['airing_start'][11:19] if anime['airing_start'] else None,
-                         anime['episodes'], anime['image_url'], float(anime['score'])) for anime in anime_list]
+                         anime['episodes'], anime['image_url'], float(anime['score']) if anime['score'] else None)
+                        for anime in anime_list if anime['mal_id'] not in self.anime_ids]
+        self.anime_ids |= set([anime[0] for anime in anime_tuples])
         self._cursor.executemany("""
             insert into {table} (mal_aid, title, synopsis, show_type, started_at, eps, img_url, score)
             values (%s,%s,%s,%s,%s,%s,%s,%s)
@@ -83,6 +94,13 @@ class DBInterface(object):
         axp_tuples = [(anime['mal_id'], producer['mal_id']) for producer in anime['producers']]
         self._cursor.executemany("""
             insert into {table} (mal_aid, mal_pid)
+            values (%s,%s)
+            """.format(table=table_name), axp_tuples)
+
+    def add_axl(self, anime, table_name='anime_x_licensors'):
+        axp_tuples = [(anime['mal_id'], licensor) for licensor in anime['licensors']]
+        self._cursor.executemany("""
+            insert into {table} (mal_aid, name)
             values (%s,%s)
             """.format(table=table_name), axp_tuples)
 

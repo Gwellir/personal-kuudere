@@ -25,9 +25,6 @@ from AnimeBotFeedParser import TorrentFeedParser
 from AnimeBotListParser import ListImporter
 
 
-PRIORITY_GROUPS = ['HorribleSubs', 'Erai-raws']
-
-
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text="Бот некоторого аниме-чатика, для регистрации в привате бота введите /reg или /register")
@@ -151,13 +148,46 @@ def show_lockouts(update, context):
                              disable_web_page_preview=True)
 
 
+# todo split into MVC model
+def show_awaited(update, context):
+    q = context.args
+    if q:
+        name = ' '.join(q)
+        if len(name) < 3:
+            context.bot.send_message(chat_id=update.effective_chat.id,
+                                     text='Используйте как минимум три символа для поиска.')
+            return
+        awaited_s = ani_db.select('*', 'awaited_anime', "name like %s", [f'%{name}%'])[:20]
+        studios_str = '\n'.join([f'<a href="https://myanimelist.net/anime/{aw[0]}">{aw[1]}</a> ({aw[2]})' +
+                                 (f' (c {str(aw[3])[:10]})' if aw[3] else '')
+                                for aw in awaited_s])
+        studios_list = ', '.join(set([aw[4].strip() for aw in awaited_s]))
+        awaited_a = ani_db.select('*', 'awaited_anime', "title like %s", [f'%{name}%'])[:20]
+        animes_str = '\n'.join([f'<a href="https://myanimelist.net/anime/{aw[0]}">{aw[1]}</a> ({aw[2]})' +
+                                (f' (c {str(aw[3])[:10]})' if aw[3] else '')
+                               for aw in awaited_a])
+        if studios_str or animes_str:
+            msg = f'<b>Ожидаемые тайтлы</b>:\n'
+            if studios_str:
+                msg += f'\nСтудии - {studios_list}:\n' + studios_str + '\n'
+            if animes_str:
+                msg += f'\nАниме:\n' + animes_str
+        else:
+            msg = 'По запросу ничего не найдено!'
+        context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
+                                 disable_web_page_preview=True)
+    else:
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Задайте имя студии или тайтла.')
+
+
 def show_user_info(update, context):
     reply = update.effective_message.reply_to_message
     if reply:
         uid, nick = reply.from_user.id,\
-                    reply.from_user.username if reply.from_user.username else reply.from_user.first_name
+                    reply.from_user.username if reply.from_user.username else reply.from_user.full_name
     else:
-        uid, nick = update.effective_user.id, update.effective_user.username
+        uid, nick = update.effective_user.id,\
+                    update.effective_user.username if update.effective_user.username else update.effective_user.full_name
 
     user_list = ani_db.select('mal_nick, service', 'users', 'tg_id = %s', [uid])
     if not user_list:
@@ -170,7 +200,6 @@ def show_user_info(update, context):
     list_link = list_prefixes[user_list[0][1]] % user_list[0][0]
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text=f'Зарегистрированный список пользователя {nick}:\n{list_link}')
-
 
 
 # todo integrate mal search
@@ -211,6 +240,7 @@ def users_seen_anime(update, context):
 
 # todo subscription (or delivery) for anime which is unavailable in users' preferred res
 def torrent_subscribe(uid, aid):
+    PRIORITY_GROUPS = ['HorribleSubs', 'Erai-raws']
     group_list = [entry[0] for entry in ani_db.select('distinct af.a_group, u.preferred_res',
                                                       'anifeeds af join users u on TRUE',
                                                       'mal_aid = %s and u.preferred_res = af.resolution and u.id = %s',
@@ -602,7 +632,7 @@ def deliver_torrents():
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # filename='log/tgbot.log',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
 
 ani_db = DBInterface()
 jikan = Jikan()
@@ -638,6 +668,7 @@ dispatcher.add_handler(InlineQueryHandler(inline_query))
 dispatcher.add_handler(CommandHandler('torrents', torrents_stats))
 dispatcher.add_handler(CommandHandler('stats', show_stats))
 dispatcher.add_handler(CommandHandler('lockout', show_lockouts))
+dispatcher.add_handler(CommandHandler('future', show_awaited))
 
 dispatcher.add_handler(MessageHandler(Filters.chat(chat_id=config.main_chat), do_nothing))
 

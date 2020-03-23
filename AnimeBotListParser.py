@@ -50,9 +50,10 @@ query ($username: String, $page: Int, $perPage: Int) {
 
 
 class ListImporter:
-    def __init__(self):
+    def __init__(self, no_db=False):
         self.jikan = Jikan()
-        self.ani_db = DBInterface()
+        if not no_db:
+            self.ani_db = DBInterface()
 
     # call this
     def update_all(self):
@@ -60,13 +61,17 @@ class ListImporter:
         self.update_mal_list_status()
         self.ani_db.close()
 
-    def get_anime_season_mal(self, year, season):
-        sa = self.jikan.season(year=year, season=season)
+    def get_anime_season_mal(self, y=None, s=None, later=False):
+        if later:
+            sa = self.jikan.season_later()
+        else:
+            sa = self.jikan.season(year=y, season=s)
         # pprint(sa['anime'][0])
         # sa_f = filter(lambda item: not item['continuing'] and item['score'] and not item['kids'],
         #                sa['anime'])
-        sa_f = filter(lambda item: item['score'] and item['kids'], sa['anime'])
-        sa_fs = sorted(sa_f, key=lambda item: item['mal_id'], reverse=False)
+        # sa_f = filter(lambda item: item['score'] and item['kids'], sa['anime'])
+        # sa_fs = sorted(sa, key=lambda item: item['mal_id'], reverse=False)
+        sa_fs = sa['anime']
         print(len(sa_fs))
         for item in sa_fs:
             print(f"{item['mal_id']:>5}", item['airing_start'][:10] if item['airing_start'] else None, item['type'],
