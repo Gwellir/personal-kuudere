@@ -50,16 +50,18 @@ query ($username: String, $page: Int, $perPage: Int) {
 
 
 class ListImporter:
-    def __init__(self, no_db=False):
-        self.jikan = Jikan()
-        if not no_db:
+    def __init__(self, ani_db, jikan, autistic=False):
+        self.ani_db = ani_db
+        self.jikan = jikan
+        if autistic:
             self.ani_db = DBInterface()
+            self.jikan = Jikan()
 
     # call this
     def update_all(self):
         self.update_ani_list_status()
         self.update_mal_list_status()
-        self.ani_db.close()
+        # self.ani_db.close()
 
     def get_anime_season_mal(self, y=None, s=None, later=False):
         if later:

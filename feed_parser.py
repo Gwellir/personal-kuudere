@@ -2,8 +2,6 @@
 
 import feedparser
 import re
-from AnimeBotDBWrapper import DBInterface
-from jikanpy import Jikan
 from colorama import Fore, Style
 from pprint import pprint
 from time import sleep
@@ -97,9 +95,9 @@ class TorrentFeedParser:
     MY_FEEDS = ['https://nyaa.si/?page=rss&c=1_2&f=0']
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
-    def __init__(self):
-        self.jikan = Jikan()
-        self.ani_db = DBInterface()
+    def __init__(self, ani_db, jikan):
+        self.jikan = jikan
+        self.ani_db = ani_db
 
     # def article_not_in_db(self, a_title, a_date):
     #     article = self.ani_db.select('*', 'anifeeds', 'title = %s AND date = %s', [a_title, a_date], quiet=True)
@@ -154,7 +152,7 @@ class TorrentFeedParser:
         for anime in a_list:
             self.do_recognize(anime[0], anime[2], parse_size(anime[3]))  # just use a fucking hash as torrent identity
         self.ani_db.commit()
-        self.ani_db.close()
+        # self.ani_db.close()
 
     # todo fix parentheses adding spare spaces to recognized title name
     # todo avoid accidentally hitting SQL VARCHAR column size limits
