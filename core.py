@@ -1,9 +1,9 @@
 from jikanpy import Jikan
-from AnimeBotHandlers import HandlersStructure
-from AnimeBotJobs import BotJobs
-from AnimeBotDBWrapper import DBInterface
-from AnimeBotFeedParser import TorrentFeedParser
-from AnimeBotListParser import ListImporter
+from handlers import HandlersStructure
+from jobs import BotJobs
+from db_wrapper import DBInterface
+from feed_parser import TorrentFeedParser
+from list_parser import ListImporter
 
 
 class BotCore:

@@ -126,8 +126,6 @@ class TorrentFeedParser:
         d_3h = timedelta(hours=3)
         last_time = (last_entry[0][0] - d_3h).astimezone(timezone('Europe/Moscow'))
         last_title = last_entry[0][1]
-        # pprint(last_time)
-        # pprint(self.get_local_time(feed['entries'][0]['published_parsed']))
         if not last_entry:
             entries = [entry for entry in feed['entries']]
         else:
@@ -241,7 +239,7 @@ class TorrentFeedParser:
         else:
             return False
 
-
-if __name__ == '__main__':
-    parser = TorrentFeedParser()
-    parser.check_feeds()
+#
+# if __name__ == '__main__':
+#     parser = TorrentFeedParser()
+#     parser.check_feeds()

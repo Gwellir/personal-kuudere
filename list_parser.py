@@ -6,7 +6,7 @@ from jikanpy import Jikan, exceptions
 from pprint import pprint
 from time import sleep
 import simplejson
-from AnimeBotDBWrapper import DBInterface
+from db_wrapper import DBInterface
 import requests
 
 PAGE_SIZE = 300

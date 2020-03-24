@@ -9,7 +9,7 @@ __pycache__/
 
 .idea/
 
-sql/dump-anibase-202002270319.sql
+sql/dump-*.sql
 
 spam/
 

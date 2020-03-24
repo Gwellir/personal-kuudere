@@ -5,10 +5,10 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, Inli
 from telegram import (ParseMode, InlineQueryResultCachedMpeg4Gif, InlineKeyboardMarkup, InlineKeyboardButton)
 from telegram.utils.helpers import mention_html
 # my classes
-from AnimeBotDBWrapper import DBInterface
-from AnimeBotEntityData import AnimeEntry
-from AnimeBotFeedParser import TorrentFeedParser
-from AnimeBotListParser import ListImporter
+from db_wrapper import DBInterface
+from entity_data import AnimeEntry
+from feed_parser import TorrentFeedParser
+from list_parser import ListImporter
 # service wrappers
 from jikanpy import Jikan
 from saucenao import SauceNao
@@ -38,8 +38,8 @@ def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
 
 
 class HandlersList(namedtuple('HandlersList',
-                              ['chat', 'private_delim', 'private', 'admin_delim', 'admin',
-                               'unknown', 'inline', 'callbacks', 'error'])):
+                              ['chat', 'private_delim', 'private', 'admin_delim', 'admin', 'unknown', 'inline',
+                               'callbacks', 'error'])):
     pass
 
 
@@ -53,7 +53,7 @@ def detect_unused_handlers(handlers_structure):
     set_of_handlers = set(listed_handlers)
     unused_functions = list(func_object_list - set_of_handlers)
     if unused_functions:
-        raise Exception(f'Unused functions detected:\n{unused_functions}')
+        raise Exception(f'Unused handlers detected:\n{unused_functions}')
 
 
 class UtilityFunctions:
@@ -141,7 +141,7 @@ class HandlersStructure:
                 'track': {'command': ['track'], 'function': self.track_anime},
                 'drop': {'command': ['drop'], 'function': self.drop_anime},
                 'saucenao': {'message': 'photo', 'function': self.ask_saucenao},
-                # this prevents the bot from replying to a gif using unauthed handler
+                # this prevents the bot from replying to a gif with unauthed handler
                 'gif': {'message': 'gif', 'function': self.do_nothing},
             },
             {
