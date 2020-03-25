@@ -35,7 +35,7 @@ filter_type_dict = {
 updater.bot.send_message(chat_id=config.dev_tg_id, text='Waking up...')
 
 for category in core.handlers.handlers_list:
-    for handler in category.values():
+    for handler in category:
         if 'command' in handler.keys():
             dispatcher.add_handler(CommandHandler(handler['command'], handler['function']))
         elif 'catcher' in handler.keys():

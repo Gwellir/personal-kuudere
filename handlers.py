@@ -48,7 +48,7 @@ def detect_unused_handlers(handlers_structure):
     func_object_list = set([method[1] for method in method_list if method[0] != '__init__'])
     listed_handlers = []
     for category in handlers_structure.handlers_list:
-        for handler in category.values():
+        for handler in category:
             listed_handlers.append(handler['function'])
     set_of_handlers = set(listed_handlers)
     unused_functions = list(func_object_list - set_of_handlers)
@@ -117,58 +117,60 @@ class HandlersStructure:
         self.jikan = jikan
         self.utilities = UtilityFunctions(ani_db)
         self.handlers_list = HandlersList(
-            {
+            [
                 # these commands can be used in group chats
-                'info': {'command': ['info'], 'function': self.info},
-                'start': {'command': ['start', 'help'], 'function': self.start},
-                'seen': {'command': ['seen'], 'function': self.users_seen_anime},
-                'anime': {'command': ['anime'], 'function': self.show_anime},
-                'user_info': {'command': ['user_info'], 'function': self.show_user_info},
-                'gif_tag': {'command': ['gif_tag'], 'function': self.gif_tags},
-                'set_q': {'command': ['set_q'], 'function': self.quote_set},
-                'quote': {'command': ['what', 'quote'], 'function': self.quotes},
-                'torrents': {'command': ['torrents'], 'function': self.torrents_stats},
-                'stats': {'command': ['stats'], 'function': self.show_stats},
-                'lockout': {'command': ['lockout'], 'function': self.show_lockouts},
-                'future': {'command': ['future'], 'function': self.show_awaited},
-            },
-            {
-                'private_catcher': {'catcher': config.main_chat, 'function': self.do_nothing},
-            },
-            {
+                {'command': ['info'], 'function': self.info},
+                {'command': ['start', 'help'], 'function': self.start},
+                {'command': ['seen'], 'function': self.users_seen_anime},
+                {'command': ['anime'], 'function': self.show_anime},
+                {'command': ['user_info'], 'function': self.show_user_info},
+                {'command': ['gif_tag'], 'function': self.gif_tags},
+                {'command': ['set_q'], 'function': self.quote_set},
+                {'command': ['what', 'quote'], 'function': self.quotes},
+                {'command': ['torrents'], 'function': self.torrents_stats},
+                {'command': ['stats'], 'function': self.show_stats},
+                {'command': ['lockout'], 'function': self.show_lockouts},
+                {'command': ['future'], 'function': self.show_awaited},
+            ],
+            [
+                # redirects non-groupchat commands in group chats to an empty function
+                {'catcher': config.main_chat, 'function': self.do_nothing},
+            ],
+            [
                 # these handlers can be used in private chats with a bot
-                'register': {'command': ['reg', 'register'], 'function': self.register_user},
-                'track': {'command': ['track'], 'function': self.track_anime},
-                'drop': {'command': ['drop'], 'function': self.drop_anime},
-                'saucenao': {'message': 'photo', 'function': self.ask_saucenao},
+                {'command': ['reg', 'register'], 'function': self.register_user},
+                {'command': ['track'], 'function': self.track_anime},
+                {'command': ['drop'], 'function': self.drop_anime},
+                {'message': 'photo', 'function': self.ask_saucenao},
                 # this prevents the bot from replying to a gif with unauthed handler
-                'gif': {'message': 'gif', 'function': self.do_nothing},
-            },
-            {
-                'admin_catcher': {'anti_catcher': config.dev_tg_id, 'function': self.unauthed},
-            },
-            {
+                {'message': 'gif', 'function': self.do_nothing},
+            ],
+            [
+                # replies with "access denied" to restricted commands in non-admin chats
+                {'anti_catcher': config.dev_tg_id, 'function': self.unauthed},
+            ],
+            [
                 # admin-only commands
                 # 'force_deliver': {'command': ['force_deliver'], 'function': self.force_deliver},
-                'send_last': {'command': ['send_last'], 'function': self.deliver_last},
-                'users': {'command': ['users'], 'function': self.users_stats},
-            },
-            {
+                {'command': ['send_last'], 'function': self.deliver_last},
+                {'command': ['users'], 'function': self.users_stats},
+            ],
+            [
                 # handler for /commands which weren't recognized
-                'unknown': {'message': 'unknown', 'function': self.unknown}
-            },
-            {
+                {'message': 'unknown', 'function': self.unknown}
+            ],
+            [
                 # handler for inline bot queries
-                'inline': {'inline': '', 'function': self.inline_query}
-            },
-            {
+                {'inline': '', 'function': self.inline_query}
+            ],
+            [
                 # callback handler
-                'callback': {'callback': '', 'function': self.process_callbacks}
-            },
-            {
+                {'callback': '', 'function': self.process_callbacks}
+            ],
+            [
                 # error handler
-                'error': {'error': '', 'function': self.error}
-            },
+                {'error': '', 'function': self.error}
+            ],
         )
         detect_unused_handlers(self)
 
