@@ -40,6 +40,8 @@ for category in core.handlers.handlers_list:
             dispatcher.add_handler(CommandHandler(handler['command'], handler['function']))
         elif 'catcher' in handler.keys():
             dispatcher.add_handler(MessageHandler(Filters.chat(chat_id=handler['catcher']), handler['function']))
+        elif 'anti_catcher' in handler.keys():
+            dispatcher.add_handler(MessageHandler(~ Filters.chat(chat_id=handler['anti_catcher']), handler['function']))
         elif 'message' in handler.keys():
             dispatcher.add_handler(MessageHandler(filter_type_dict[handler['message']], handler['function']))
         elif 'inline' in handler.keys():

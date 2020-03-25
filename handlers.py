@@ -145,7 +145,7 @@ class HandlersStructure:
                 'gif': {'message': 'gif', 'function': self.do_nothing},
             },
             {
-                'admin_catcher': {'catcher': config.dev_tg_id, 'function': self.unauthed},
+                'admin_catcher': {'anti_catcher': config.dev_tg_id, 'function': self.unauthed},
             },
             {
                 # admin-only commands
@@ -374,6 +374,7 @@ class HandlersStructure:
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено:\n<b>{q}</b>',
                                          parse_mode=ParseMode.HTML)
 
+    # todo check whether torrent file still exists
     # todo make sure old callbacks do not fuck shit up
     def track_anime(self, update, context):
         user_id = self.ani_db.select('id', 'users', 'tg_id = %s', [update.effective_user.id])
