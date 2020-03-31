@@ -13,6 +13,7 @@ from core import BotCore
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # filename='log/tgbot.log',
                     level=logging.DEBUG)
 
+# telegram.ext initialisation
 updater = Updater(token=config.token, use_context=True)
 jobs = updater.job_queue
 dispatcher = updater.dispatcher
@@ -22,7 +23,7 @@ core = BotCore(updater)
 job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=0)
 announce_time = datetime.strptime("14:01", "%H:%M").time()
 job_show_digest = jobs.run_daily(core.jobs.show_daily_events, announce_time)
-list_update_time = datetime.strptime("04:30", "%H:%M").time()
+list_update_time = datetime.strptime("05:03", "%H:%M").time()
 job_update_lists = jobs.run_daily(core.jobs.update_lists, list_update_time)
 
 filter_type_dict = {
@@ -32,8 +33,7 @@ filter_type_dict = {
     'unknown': Filters.command,
 }
 
-updater.bot.send_message(chat_id=config.dev_tg_id, text='Waking up...')
-
+# feeding handlers for commands and processable message types to dispatcher while applying restrictions
 for category in core.handlers.handlers_list:
     for handler in category:
         if 'command' in handler.keys():
@@ -51,6 +51,7 @@ for category in core.handlers.handlers_list:
         elif 'error' in handler.keys():
             dispatcher.add_error_handler(handler['function'])
 
+updater.bot.send_message(chat_id=config.dev_tg_id, text='Waking up...')
 # dispatcher.add_handler(CommandHandler('info', info))
 #
 # dispatcher.add_handler(CommandHandler(['start', 'help'], start))

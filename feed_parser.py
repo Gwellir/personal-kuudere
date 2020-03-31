@@ -15,6 +15,10 @@ CATCH_360 = ['360p']
 CATCH_480 = ['480p', '720x480']
 CATCH_720 = ['720p', '1280x720']
 CATCH_1080 = ['1080p', '1920x1080']
+match_in_square_brackets = re.compile(r'\[(.*?)\]')
+match_in_round_brackets = re.compile(r'\((.*?)\)')
+match_extension = re.compile(r'.*\.(\w+)$')
+match_ep_number = re.compile(r'.*((?P<season>S\d+)E|- |episode )(\d+).*')
 
 
 # todo well, this is a piece of shit
@@ -30,8 +34,19 @@ def title_compare(variants, title):
     return None
 
 
-def parse_size(desc):
-    size_info = desc.rsplit("|", 3)[1].strip().split(" ")
+def parse_size(description):
+    """
+    Gets the "size" part (in MiB) from torrent's feed entry description (returns 0 if below 1 MiB).
+    Description example:
+    <a href="https://nyaa.si/view/1224828">#1224828 |
+    ( Dragontime ) My Hero Academia S04E18 1080P WEBRIP AAC2.0.H.264 DUAL AUDIO</a> |
+     1.4 GiB |
+      Anime - English-translated |
+       48C16DA297AB1A2C9E65CADE9F532B0EFDEE658D
+    :param description: Release description string
+    :rtype: int
+    """
+    size_info = description.rsplit("|", 3)[1].strip().split(" ")
     size = int(float(size_info[0]))
     if size_info[1] == "KiB":
         size = 0
@@ -40,48 +55,61 @@ def parse_size(desc):
     return size
 
 
-def get_resolution_from_params(params):
+def get_resolution_from_tags(tags):
+    """
+    Checks list for tags related to typical video resolutions and returns a corresponding number
+    :param tags: list of parsed tags
+    :rtype: int
+    """
     resolution = None
-    if [x for x in CATCH_720 if x in [p.lower() for p in params]]:
+    if [res for res in CATCH_720 if res in [t.lower() for t in tags]]:
         resolution = 720
-    elif [x for x in CATCH_1080 if x in [p.lower() for p in params]]:
+    elif [res for res in CATCH_1080 if res in [t.lower() for t in tags]]:
         resolution = 1080
-    elif [x for x in CATCH_480 if x in [p.lower() for p in params]]\
-            or [x for x in CATCH_360 if x in [p.lower() for p in params]]:
+    elif [res for res in CATCH_480 if res in [t.lower() for t in tags]]\
+            or [res for res in CATCH_360 if res in [t.lower() for t in tags]]:
         resolution = 480
     return resolution
 
 
 def parse_feed_title(a_title):
-    re_fa = re.findall(r'\[(.*?)\]', a_title)
+    """
+    Parses release title string.
+    Looks for any parts of the title wrapped in square or round brackets and creates a tag list from them,
+    tries to identify file extension, episode number and release resolution.
+    Strips everything found and returns the remaining string as a title along with other relevant info.
+    :param a_title: release title string
+    :returns: tuple of (int, str, str, int, str)
+    """
     a_ext = a_ep_no = a_group = None
     group_not_found = True
-    params = []
-    if re_fa:
-        a_group = re_fa[0]
+    all_tags = []
+    tags_in_square = match_in_square_brackets.findall(a_title)
+    if tags_in_square:
+        a_group = tags_in_square[0]
         group_not_found = False
-        for match in re_fa:
-            params.extend(match.split(' '))
+        for match in tags_in_square:
+            all_tags.extend(match.split(' '))
             a_title = str.replace(a_title, f'[{match}]', '').strip()
-    re_fa = re.findall(r'\((.*?)\)', a_title)
-    if re_fa:
+    tags_in_round = match_in_round_brackets.findall(a_title)
+    if tags_in_round:
         if group_not_found:
-            a_group = re_fa[0]
-        for match in re_fa:
-            params.extend(match.split(' '))
+            a_group = tags_in_round[0]
+        for match in tags_in_round:
+            all_tags.extend(match.split(' '))
             a_title = str.replace(a_title, f'({match})', '').strip()
-    print(f'{Fore.BLUE}{params}{Style.RESET_ALL}')
-    a_res = get_resolution_from_params(params)
-    re_ext = re.match(r'.*\.(\w+)$', a_title)
-    if re_ext:
-        a_ext = re_ext.group(1)
+    print(f'{Fore.BLUE}{all_tags}{Style.RESET_ALL}')
+    a_res = get_resolution_from_tags(all_tags)
+    extension = match_extension.match(a_title)
+    if extension:
+        a_ext = extension.group(1)
         a_title = str.replace(a_title, f'.{a_ext}', '').strip()
-    re_ep_no = re.match(r'.*((?P<season>S\d+)E|- |episode )(\d+).*', a_title)
-    if re_ep_no:
-        a_ep_no = re_ep_no.group(3)
-        a_title = a_title[:a_title.find(f'{re_ep_no.group(1)}{re_ep_no.group(3)}')]
-        if re_ep_no.group('season'):
-            a_title += re_ep_no.group('season')
+    ep_number = match_ep_number.match(a_title)
+    if ep_number:
+        a_ep_no = ep_number.group(3)
+        a_title = a_title[:a_title.find(f'{ep_number.group(1)}{ep_number.group(3)}')]
+        if ep_number.group('season'):
+            a_title += ep_number.group('season')
         a_title = a_title.strip()
     return a_ep_no, a_group, a_title, a_res, a_ext
 
@@ -92,6 +120,12 @@ def get_local_time(dtime):
 
 
 class TorrentFeedParser:
+    """
+    Handles retrieving and parsing nyaa.si rss feed, recognizing titles while matching them to MAL entries
+    and downloading torrent files for further delivery.
+
+    <Should be split up and named NyaaFeedParser after logic is changed to support multiple feed sources>
+    """
     MY_FEEDS = ['https://nyaa.si/?page=rss&c=1_2&f=0']
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
@@ -99,12 +133,15 @@ class TorrentFeedParser:
         self.jikan = jikan
         self.ani_db = ani_db
 
-    # def article_not_in_db(self, a_title, a_date):
-    #     article = self.ani_db.select('*', 'anifeeds', 'title = %s AND date = %s', [a_title, a_date], quiet=True)
-    #     return not article
-
     def add_to_db(self, a_title, a_date, a_link, a_description):
-        # do_recognize(a_title)
+        """
+        Inserts an entry into database, or updates it in case of remote edits (very rare occurrence).
+        :param a_title:
+        :param a_date:
+        :param a_link:
+        :param a_description:
+        :return:
+        """
         if not self.ani_db.select('*', 'anifeeds', 'title = %s and date = %s', [a_title, a_date]):
             self.ani_db._cursor.execute("INSERT into anifeeds (title, date, link, description)"
                                         "VALUES (%s,%s,%s,%s)", (a_title, a_date, a_link, a_description))
@@ -115,21 +152,26 @@ class TorrentFeedParser:
 
     def get_last_entry(self):
         last_entry = self.ani_db.select('date, title', 'anifeeds', 'TRUE order by date desc limit %s', [1])
-        self.ani_db.commit()
+        self.ani_db.commit()  # todo spare commits probably not needed anymore
         return last_entry
 
     # todo scraping if no overlap?
-    # todo SET TIMEZONES
-    def read_article_feed(self, feed):
-        feed = feedparser.parse(feed)
-        last_entry = self.get_last_entry()
-        d_3h = timedelta(hours=3)
-        last_time = (last_entry[0][0] - d_3h).astimezone(timezone('Europe/Moscow'))
-        last_title = last_entry[0][1]
-        if not last_entry:
-            entries = [entry for entry in feed['entries']]
+    # todo SET MYSQL TIMEZONES
+    def read_article_feed(self, rss_feed):
+        """
+        Parses new feed entries, checks for overlap with stored entries, prepares and stores data in database.
+        :param rss_feed: Nyaa.si English-translated releases feed URL
+        :return:
+        """
+        parsed_feed = feedparser.parse(rss_feed)
+        last_db_entry = self.get_last_entry()
+        d_3h = timedelta(hours=3)  # timezone hacks
+        last_time = (last_db_entry[0][0] - d_3h).astimezone(timezone('Europe/Moscow'))
+        last_title = last_db_entry[0][1]
+        if not last_db_entry:
+            entries = [entry for entry in parsed_feed['entries']]
         else:
-            entries = [entry for entry in feed['entries']
+            entries = [entry for entry in parsed_feed['entries']
                        if get_local_time(entry.published_parsed) > last_time
                        or (get_local_time(entry.published_parsed) == last_time
                            and entry['title'] != last_title)]
@@ -144,18 +186,33 @@ class TorrentFeedParser:
             print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
 
     def check_feeds(self):
-        for f in self.MY_FEEDS:
-            self.read_article_feed(f)
-        a_list = self.ani_db.select('*', 'anifeeds', 'checked = %s order by date', [0])
-        for anime in a_list:
-            self.do_recognize(anime[0], anime[2], parse_size(anime[3]))  # just use a fucking hash as torrent identity
+        """
+        Main class function, checks feed(s) for new entries, stores them in DB and hands to the parser/torrent storage
+        function.
+        Should be called from outside this class.
+        :return:
+        """
+        for feed in self.MY_FEEDS:
+            self.read_article_feed(feed)
+        release_list = self.ani_db.select('*', 'anifeeds', 'checked = %s order by date', [0])
+        for release in release_list:
+            self.do_recognize(release[0], release[2], parse_size(release[3]))  # just use a fucking hash as torrent identity
         self.ani_db.commit()
         # self.ani_db.close()
 
+    # todo batch parsing and delivery (possibly subscribe for complete seasons?)
     # todo fix parentheses adding spare spaces to recognized title name
     # todo avoid accidentally hitting SQL VARCHAR column size limits
     # todo version/recap parsing
-    def do_recognize(self, a_title, t_link, f_size):
+    def do_recognize(self, a_title, torrent_link, file_size):
+        """
+        Tries to recognize a parsed title of an anime release, match it to its MAL entry, store relevant information
+        in DB and save related torrent file for potential further delivery.
+        :param a_title:
+        :param torrent_link:
+        :param file_size:
+        :return:
+        """
         save_title = a_title
         a_ep_no, a_group, a_title, a_res, a_ext = parse_feed_title(a_title)
         if a_ep_no and a_group and a_title:
@@ -166,12 +223,12 @@ class TorrentFeedParser:
                 mal_ids = self.ani_db.select('DISTINCT mal_aid', 'list_status',
                                              '`title` like %s and `show_type` = "TV" and `airing` = 1', [a_title])
                 if not mal_ids:
-                    sr = self.jikan.search('anime', a_title, page=2,
+                    search_results = self.jikan.search('anime', a_title, page=2,
                                            parameters={'type': 'tv', 'status': 'airing', 'limit': 5, 'genre': 15,
                                                        'genre_exclude': 0})
                     sleep(2)
                     # test for legit episode numbers as MAL sometimes returns very strange title matches
-                    mal_ids = [(result['mal_id'],) for result in sr['results']
+                    mal_ids = [(result['mal_id'],) for result in search_results['results']
                                if (result['episodes'] == 0 or result['episodes'] >= int(a_ep_no))]
                 if len(mal_ids) == 1:
                     print(mal_ids[0][0])
@@ -180,7 +237,7 @@ class TorrentFeedParser:
                     #               [mal_id, a_group, a_res, int(a_ep_no)], f'title = %s', [save_title])
                 else:
                     print(f"Can't get a precise result... {mal_ids}")
-                    mal_id = title_compare(sr['results'], a_title)
+                    mal_id = title_compare(search_results['results'], a_title)
                 # check whether we have title info
                 if mal_id:
                     if not self.ani_db.select('mal_aid', 'anime', 'mal_aid = %s', [mal_id]):
@@ -202,18 +259,29 @@ class TorrentFeedParser:
                 mal_id = mal_id[0][0]
             self.ani_db.update('anifeeds',
                                'mal_aid = %s, a_group = %s, resolution = %s, ep = %s, size = %s, checked = %s',
-                               [mal_id, a_group, a_res, int(a_ep_no), f_size, 1], 'title = %s', [save_title])
+                               [mal_id, a_group, a_res, int(a_ep_no), file_size, 1], 'title = %s', [save_title])
             self.ani_db.commit()
             if mal_id:
-                self.torrent_save(mal_id, a_group, a_ep_no, t_link, a_title, a_res, f_size)
+                self.torrent_save(mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size)
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
-            self.ani_db.update('anifeeds', 'checked = %s, size = %s', [1, f_size], 'title = %s', [save_title])
+            self.ani_db.update('anifeeds', 'checked = %s, size = %s', [1, file_size], 'title = %s', [save_title])
             self.ani_db.commit()
         return
 
     # todo implement actual check for files which failed to download
     def torrent_save(self, mal_id, group, episode, link, title, res, size):
+        """
+        Downloads, names and saves a torrent file using information from a parsed nyaa.si feed entry.
+        :param mal_id:
+        :param group:
+        :param episode:
+        :param link:
+        :param title:
+        :param res:
+        :param size:
+        :returns: Name of local torrent file
+        """
         is_downloaded = False
         title = re.sub(r'[|/\\?:<>]', ' ', title)
         url = link
@@ -226,10 +294,10 @@ class TorrentFeedParser:
             f.close()
             print(f'Downloaded "{link}" for {title}({mal_id}) ep {episode} from {group}, size - {size}')
         if is_downloaded:
-            test = self.ani_db.select('*', 'torrent_files',
+            entry_exists = self.ani_db.select('*', 'torrent_files',
                                       'mal_aid = %s and a_group = %s and episode = %s and res = %s and file_size = %s',
                                       [mal_id, group, episode, res, size])
-            if not test:
+            if not entry_exists:
                 self.ani_db._cursor.execute("insert torrent_files values (%s, %s, %s, %s, %s, %s)",
                                             (mal_id, group, episode, filename, res, size))
                 self.ani_db.commit()

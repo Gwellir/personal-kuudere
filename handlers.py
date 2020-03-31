@@ -19,6 +19,7 @@ import traceback
 import uuid
 from collections import namedtuple
 import inspect
+from random import choice as rand_choice
 import re
 import html
 from time import sleep
@@ -57,8 +58,9 @@ def detect_unused_handlers(handlers_structure):
 
 
 class UtilityFunctions:
-    def __init__(self, ani_db):
+    def __init__(self, ani_db, jikan):
         self.ani_db = ani_db
+        self.jikan = jikan
 
     # todo subscription (or delivery) for anime which is unavailable in users' preferred res
     def torrent_subscribe(self, uid, aid):
@@ -109,13 +111,27 @@ class UtilityFunctions:
                                'mal_aid = %s', [a_entry.mal_id])
             self.ani_db.commit()
 
+    def get_anime_info(self, query):
+        j_result = self.jikan.search('anime', query, parameters={'limit': 5})
+        sleep(2)
+        results = j_result['results']
+        local_result = None
+        # local_result = self.ani_db.select('*', 'anime', 'mal_aid = %s', [results[0]['mal_id']])
+        if not local_result:
+            anime = self.jikan.anime(results[0]['mal_id'])
+            sleep(2)
+        # pprint(anime)
+        output = AnimeEntry(**anime)
+        self.store_anime(output)
+        return output
+
 
 class HandlersStructure:
     def __init__(self, updater, ani_db, jikan):
         self.updater = updater
         self.ani_db = ani_db
         self.jikan = jikan
-        self.utilities = UtilityFunctions(ani_db)
+        self.utilities = UtilityFunctions(ani_db, jikan)
         self.handlers_list = HandlersList(
             [
                 # these commands can be used in group chats
@@ -131,9 +147,10 @@ class HandlersStructure:
                 {'command': ['stats'], 'function': self.show_stats},
                 {'command': ['lockout'], 'function': self.show_lockouts},
                 {'command': ['future'], 'function': self.show_awaited},
+                {'command': ['random'], 'function': self.random_choice},
             ],
             [
-                # redirects non-groupchat commands in group chats to an empty function
+                # redirects non-groupchat commands in group chats to an empty handler
                 {'catcher': config.main_chat, 'function': self.do_nothing},
             ],
             [
@@ -188,6 +205,21 @@ class HandlersStructure:
             pm = None
         context.bot.send_message(chat_id=update.effective_chat.id, text=info_post[0][0], parse_mode=pm,
                                  disable_web_page_preview=True)
+
+    def random_choice(self, update, context):
+        q = ' '.join(context.args)
+        if not q:
+            ptw_list = self.ani_db.select('title, mal_aid', 'list_status ls join users u on ls.user_id = u.mal_uid',
+                                          'u.tg_id = %s and ls.status = %s and ls.airing != %s',
+                                          [update.effective_user.id, 6, 3])
+            answer = None
+            if ptw_list:
+                answer = rand_choice(ptw_list)
+            msg = 'Случайное аниме из PTW:\n\n'
+            msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>'\
+                if answer else 'в PTW не найдено тайтлов'
+            context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
+
 
     def quotes(self, update, context):
         q = ' '.join(context.args)
@@ -464,16 +496,7 @@ class HandlersStructure:
         if not context.args:
             return
         q = ' '.join(context.args)
-        j_result = self.jikan.search('anime', q, parameters={'limit': 5})
-        # sleep(2)
-        results = j_result['results']
-        local_result = None
-        # local_result = self.ani_db.select('*', 'anime', 'mal_aid = %s', [results[0]['mal_id']])
-        if not local_result:
-            anime = self.jikan.anime(results[0]['mal_id'])
-        # pprint(anime)
-        output = AnimeEntry(**anime)
-        self.utilities.store_anime(output)
+        output = self.utilities.get_anime_info(q)
         context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
                                  parse_mode=ParseMode.HTML)
         sleep(2)
@@ -492,7 +515,8 @@ class HandlersStructure:
             filtered_results = saucenao.check_file(file_name=name)
             pprint(filtered_results)
             sep = '\n'
-            results = [f"{entry['data']['title']}\n{sep.join(entry['data']['content'])}"
+            results = [f"{entry['data']['title']}\n{sep.join(entry['data']['content'])}\n" +
+                       (f"Est. time: {entry['data']['est_time']}\n" if 'est_time' in entry['data'].keys() else '') +
                        f"Similarity: {entry['header']['similarity']}\n{sep.join(entry['data']['ext_urls'])}"
                        for entry in filtered_results if entry['data']['ext_urls']]  #
             if not results:

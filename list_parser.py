@@ -80,6 +80,32 @@ class ListImporter:
                   item['score'], item['title'], )
         return sa_fs
 
+    def format_anilist_response(self, answer):
+        page_info = answer['data']['Page']['mediaList']
+        airing_status_dict = {
+            'FINISHED': 2,
+            'RELEASING': 1,
+            'NOT_YET_RELEASED': 3,
+        }
+        user_status_dict = {
+            'CURRENT': 1,
+            'COMPLETED': 2,
+            'PAUSED': 3,
+            'DROPPED': 4,
+            'PLANNING': 6,
+        }
+        mal_adapted = [{
+            'mal_id': item['media']['idMal'],
+            'title': item['media']['title']['romaji'],
+            'type': item['media']['format'] if item['media']['format'] != 'TV_SHORT' else 'TV',
+            'watching_status': user_status_dict[item['status']],
+            'watched_episodes': item['progress'],
+            'total_episodes': item['media']['episodes'],
+            'score': item['score'],
+            'airing_status': airing_status_dict[item['media']['status']],
+        } for item in page_info]
+        return mal_adapted
+
     def get_animelist_anilist(self, user):
         # answer = user_list_load(user)
         answer = None
@@ -98,30 +124,7 @@ class ListImporter:
                     answer = response.json()
                     sleep(1)
                     print(curr_page, err_count)
-                    page_info = answer['data']['Page']['mediaList']
-                    airing_status_dict = {
-                        'FINISHED': 2,
-                        'RELEASING': 1,
-                        'NOT_YET_RELEASED': 3,
-                    }
-                    user_status_dict = {
-                        'CURRENT': 1,
-                        'COMPLETED': 2,
-                        'PAUSED': 3,
-                        'DROPPED': 4,
-                        'PLANNING': 6,
-                    }
-                    mal_adapted = [{
-                        'mal_id': item['media']['idMal'],
-                        'title': item['media']['title']['romaji'],
-                        'type': item['media']['format'] if item['media']['format'] != 'TV_SHORT' else 'TV',
-                        'watching_status': user_status_dict[item['status']],
-                        'watched_episodes': item['progress'],
-                        'total_episodes': item['media']['episodes'],
-                        'score': item['score'],
-                        'airing_status': airing_status_dict[item['media']['status']],
-                    } for item in page_info]
-                    anime_list += mal_adapted
+                    anime_list += self.format_anilist_response(answer)
                     has_next = answer['data']['Page']['pageInfo']['hasNextPage']
                     err_count = 0
                 except simplejson.errors.JSONDecodeError:
