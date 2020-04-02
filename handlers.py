@@ -17,7 +17,7 @@ import logging
 import sys
 import traceback
 import uuid
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import inspect
 from random import choice as rand_choice
 import re
@@ -171,6 +171,7 @@ class HandlersStructure:
                 # 'force_deliver': {'command': ['force_deliver'], 'function': self.force_deliver},
                 {'command': ['send_last'], 'function': self.deliver_last},
                 {'command': ['users'], 'function': self.users_stats},
+                {'command': ['prep_waifu_list'], 'function': self.process_waifus},
             ],
             [
                 # handler for /commands which weren't recognized
@@ -407,6 +408,41 @@ class HandlersStructure:
             else:
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено:\n<b>{q}</b>',
                                          parse_mode=ParseMode.HTML)
+
+    def process_waifus(self, update, context):
+        entities = update.effective_message.parse_entities(types='url')
+        if not entities:
+            return
+        link_list = [*entities.values()]
+        mal_character_ids = []
+        for link in link_list:
+            result = re.match('https://myanimelist\\.net/character/(\d+)/.*', link)
+            if result:
+                mal_character_ids.append(result.group(1))
+        pprint(mal_character_ids)
+        ongoing_ids = [item[0] for item in self.ani_db.select('mal_aid', 'ongoings')]
+        print(ongoing_ids)
+        allowed_entries = defaultdict(list)
+        waifu_counter = 0
+        for id in mal_character_ids:
+            info = self.jikan.character(id)
+            sleep(2)
+            in_anime = [(item['mal_id'], item['name']) for item in info['animeography']]
+            old_anime = [anime for anime in in_anime if not (anime[0] in ongoing_ids)]
+            if not old_anime:
+                allowed_entries[in_anime[0][1]].append((id, info['name']))
+                print(f'ALLOWED: {info["name"]}({id})')
+                waifu_counter += 1
+            else:
+                print(f'DENIED: {info["name"]}({id}) - {old_anime[0][1]}')
+        msg = f'<b>Список внесённых няш сезона ({waifu_counter})</b>:'
+        # pprint(allowed_entries)
+        for anime in [*allowed_entries.keys()]:
+            msg += f'\n\n<b>{anime}</b>\n'
+            msg += '\n'.join([f'<a href="https://myanimelist.net/character/{char[0]}/">{char[1]}</a>'
+                             for char in allowed_entries[anime]])
+        context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
+                                 disable_web_page_preview=True)
 
     # todo check whether torrent file still exists
     # todo make sure old callbacks do not fuck shit up
