@@ -226,10 +226,10 @@ class ListImporter:
 
 
 if __name__ == '__main__':
-    li = ListImporter()
-    # li.update_mal_list_status('Otakon273')
+    li = ListImporter(None, None, autistic=True)
+    li.update_mal_list_status('')
     # li.update_all()
-    li.get_anime_season_mal()
+    # li.get_anime_season_mal()
 
 # get_animelist_mal(('unambo'), None)
 # season_list = get_anime_season(2020, 'winter')

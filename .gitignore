@@ -18,3 +18,5 @@ config.py
 /xml/
 /spam/spam.py
 /data/
+
+venv/
