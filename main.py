@@ -21,9 +21,9 @@ dispatcher = updater.dispatcher
 core = BotCore(updater)
 
 job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=0)
-announce_time = datetime.strptime("14:01", "%H:%M").time()
+announce_time = datetime.strptime("14:01 +0300", "%H:%M %z").time()
 job_show_digest = jobs.run_daily(core.jobs.show_daily_events, announce_time)
-list_update_time = datetime.strptime("05:03", "%H:%M").time()
+list_update_time = datetime.strptime("05:03 +0300", "%H:%M %z").time()
 job_update_lists = jobs.run_daily(core.jobs.update_lists, list_update_time)
 
 filter_type_dict = {
