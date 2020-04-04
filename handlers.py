@@ -25,6 +25,7 @@ import html
 from time import sleep
 from pprint import pprint
 from datetime import datetime
+import argparse
 
 
 # todo inline keyboard builder shouldn't be here
@@ -148,6 +149,7 @@ class HandlersStructure:
                 {'command': ['lockout'], 'function': self.show_lockouts},
                 {'command': ['future'], 'function': self.show_awaited},
                 {'command': ['random'], 'function': self.random_choice},
+                {'command': ['users'], 'function': self.users_stats},
             ],
             [
                 # redirects non-groupchat commands in group chats to an empty handler
@@ -170,7 +172,6 @@ class HandlersStructure:
                 # admin-only commands
                 # 'force_deliver': {'command': ['force_deliver'], 'function': self.force_deliver},
                 {'command': ['send_last'], 'function': self.deliver_last},
-                {'command': ['users'], 'function': self.users_stats},
                 {'command': ['prep_waifu_list'], 'function': self.process_waifus},
             ],
             [
@@ -208,19 +209,103 @@ class HandlersStructure:
                                  disable_web_page_preview=True)
 
     def random_choice(self, update, context):
-        q = ' '.join(context.args)
-        if not q:
+        def parse_random_command(opts):
+            parser = argparse.ArgumentParser(description='Get random anime from stored userlists.')
+            group_score = parser.add_argument_group()
+            # group_ptw_score.add_argument('-p', '--ptw', action='store_true')
+            group_score.add_argument('-s', '--score', nargs='+', type=int)
+            parser.add_argument('-u', '--users', nargs='+')
+            parser.add_argument('-t', '--type', nargs='+')
+
+            parsed = None
+            try:
+                parsed = parser.parse_args(opts)
+            except:
+                pprint(parsed)
+
+            return parsed
+
+        params = parse_random_command(context.args)
+        if not context.args:
+            if update.effective_user.id not in [entry[0] for entry in self.ani_db.select('tg_id', 'users')]:
+                context.bot.send_message(chat_id=update.effective_chat.id,
+                                         text='Вы не зарегистрированы на боте, используйте /reg в моём привате!')
+                return
             ptw_list = self.ani_db.select('title, mal_aid', 'list_status ls join users u on ls.user_id = u.mal_uid',
                                           'u.tg_id = %s and ls.status = %s and ls.airing != %s',
-                                          [update.effective_user.id, 6, 3])
+                                          [update.effective_user.id, 6,  # PTW
+                                           3])  # not not_yet_aired
             answer = None
             if ptw_list:
                 answer = rand_choice(ptw_list)
             msg = 'Случайное аниме из PTW:\n\n'
             msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>'\
                 if answer else 'в PTW не найдено тайтлов'
-            context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
-
+        elif params and not params.score:
+            mal_nicks = params.users
+            ptw_list = self.ani_db.select('title, mal_aid', 'list_status ls join users u on ls.user_id = u.mal_uid',
+                                          "u.mal_nick in (%s) and ls.status = %s and ls.airing != %s",
+                                          [','.join(mal_nicks), 6,  # PTW
+                                           3])  # not not_yet_aired
+            answer = None
+            if ptw_list:
+                answer = rand_choice(ptw_list)
+            sep = ', '
+            msg = f'Случайное аниме из PTW пользователя "{sep.join(mal_nicks)}":\n\n'
+            msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>' \
+                if answer else 'в PTW не найдено тайтлов'
+        else:
+            pprint(params)
+            ignored_list = [str(entry) for entry in [1306893]]  # toiro
+            if not params:
+                msg = 'Использование:\n<code>/random</code> - случайное аниме из вашего PTW, либо\n' \
+                      '<code>/random [-s X [Y]] [-u user1 user2...] [-t type1* type2*...]</code> - ' \
+                      'случайная рекомендация с оценкой из интервала X-Y из списков пользователей бота.\n' \
+                      '<code>/random [-u user1 user2...] [-t type1* type2*...]</code> - ' \
+                      'случайная рекомендация из списков PTW пользователей бота.\n\n' \
+                      '<code>*типы - TV, Movie, OVA, ONA, Special, Music, Unknown, Other</code>'
+            else:
+                if len(params.score) == 1:
+                    params.score.append(params.score[0])
+                if params.score[0] not in range(1, 11) or params.score[1] not in range(1, 11):
+                    msg = 'Оценка должна быть в диапазоне от 1 до 10'
+                else:
+                    registered_users = [entry[0].lower() for entry in self.ani_db.select('mal_nick', 'users',
+                                                                                         'mal_nick is not NULL', [])]
+                    if params.users:
+                        legit_users = [user.lower() for user in params.users if user.lower() in registered_users]
+                    else:
+                        legit_users = [user.lower() for user in registered_users]
+                    if params.type:
+                        types_lower = [type_.lower() for type_ in params.type]
+                    else:
+                        types_lower = ['tv', 'ova', 'movie', 'ona', 'special', 'unknown', 'music', 'other']
+                    high_score_list = self.ani_db.select('distinct title, mal_aid, u.mal_nick, ls.show_type',
+                                                         'list_status ls join users u on ls.user_id = u.mal_uid',
+                                                         'ls.status = %s and ls.score >= %s and ls.score <= %s '
+                                                         'and ls.user_id not in (%s)',
+                                                         [2, params.score[0], params.score[1], ','.join(ignored_list)])  # ignoring superlists
+                    your_list = [entry[0] for entry in self.ani_db.select('mal_aid',
+                                                                          'list_status ls join users u on ls.user_id = u.mal_uid',
+                                                                          'u.tg_id = %s and ls.status != %s',
+                                                                          [update.effective_user.id, 6])]
+                    recommended_list = [entry for entry in high_score_list
+                                        if entry[2].lower() in legit_users
+                                        and entry[3].lower() in types_lower
+                                        and entry[1] not in your_list]
+                    print(len(recommended_list), 'items remaining')
+                    answer = None
+                    if recommended_list:
+                        answer = rand_choice(recommended_list)
+                    sep = ', '
+                    msg = f'<b>Случайное аниме из сохранённых списков</b>:\n'
+                    msg += f'<b>пользователи</b>: {sep.join(legit_users)}\n' if params.users else ''
+                    msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
+                    msg += f'<b>оценка</b>: [{params.score[0]}-{params.score[1]}]\n\n' if params.score[0] != params.score[1]\
+                        else f'<b>оценка</b>: [{params.score[0]}]\n\n'
+                    msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}'\
+                        if answer else 'в списках не найдено подходящих тайтлов'
+        context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
 
     def quotes(self, update, context):
         q = ' '.join(context.args)
@@ -300,7 +385,7 @@ class HandlersStructure:
                 'status = %s and airing = %s and show_type = %s', [1, 1, 'TV'])])
             msg = f'Активные пользователи:\n{users}'
         else:
-            users = '\n'.join([u[0] for u in self.ani_db.select('distinct mal_nick',
+            users = '\n'.join([f'{u[1]} - {u[0]}' for u in self.ani_db.select('distinct mal_nick, tg_nick',
                                                                 'list_status l join users u on u.mal_uid = l.user_id')])
             msg = f'Список пользователей:\n{users}'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
