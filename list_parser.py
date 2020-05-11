@@ -6,8 +6,10 @@ from jikanpy import Jikan, exceptions
 from pprint import pprint
 from time import sleep
 import simplejson
-from db_wrapper import DBInterface
+import config
 import requests
+
+from db_wrapper2 import DataInterface
 
 PAGE_SIZE = 300
 API_ERROR_LIMIT = 4
@@ -50,29 +52,30 @@ query ($username: String, $page: Int, $perPage: Int) {
 
 
 class ListImporter:
-    def __init__(self, ani_db, jikan, autistic=False):
-        self.ani_db = ani_db
+    def __init__(self, jikan, di, autistic=False):
+        """
+        Initializes requirements for list parser
+
+        :param jikan:
+        :param di: DataInterface DB connector instance
+        :type di: :class:`db_wrapper2.DataInterface`
+        """
         self.jikan = jikan
+        self.di = di
         if autistic:
-            self.ani_db = DBInterface()
             self.jikan = Jikan()
+            self.di = DataInterface()
 
     # call this
     def update_all(self):
         self.update_ani_list_status()
         self.update_mal_list_status()
-        # self.ani_db.close()
 
     def get_anime_season_mal(self, y=None, s=None, later=False):
         if later:
             sa = self.jikan.season_later()
         else:
             sa = self.jikan.season(year=y, season=s)
-        # pprint(sa['anime'][0])
-        # sa_f = filter(lambda item: not item['continuing'] and item['score'] and not item['kids'],
-        #                sa['anime'])
-        # sa_f = filter(lambda item: item['score'] and item['kids'], sa['anime'])
-        # sa_fs = sorted(sa, key=lambda item: item['mal_id'], reverse=False)
         sa_fs = sa['anime']
         print(len(sa_fs))
         for item in sa_fs:
@@ -139,8 +142,6 @@ class ListImporter:
                     break
             if err_count == API_ERROR_LIMIT:
                 anime_list = []
-        # for item in anime_list:
-        #     print(f"{item['mal_id']:<5} {item['type']:<5} {item['score']:>2} {item['title']}")
         print(len(anime_list), 'items received.')
         return anime_list
 
@@ -157,7 +158,7 @@ class ListImporter:
                 try:
                     answer = self.jikan.user(username=user['username'], request='animelist', argument='all',
                                              page=curr_page + 1, parameters={'sort': 'descending', 'order_by': 'score'})
-                    sleep(2)
+                    sleep(config.jikan_delay)
                     print(curr_page, err_count)
                     anime_list += answer['anime']
                     err_count = 0
@@ -178,28 +179,26 @@ class ListImporter:
 
     def update_mal_list_status(self, nick=None):
         if not nick:
-            userlist_mal = self.ani_db.select('mal_nick, mal_uid', 'users', 'service = %s', ['MAL'])
+            userlist_mal = self.di.select_service_users_ids('MAL').all()
         else:
             userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
             user = self.jikan.user(username=user_entry[0])
             # pprint(user)
-            sleep(2)
+            sleep(config.jikan_delay)
             print(user['username'], '-> got profile data')
             if not user_entry[1]:
-                self.ani_db.update('users', 'mal_uid = %s', [user['user_id']], 'mal_nick = %s', [user['username']])
+                self.di.update_users_service_id_for_service_nick(user['user_id'], user['username'])
             alist = self.get_animelist_mal(user)
-            have_user = self.ani_db.select('user_id', 'list_status', 'user_id = %s', [user['user_id']])
+            have_user = self.di.select_user_is_in_list_status(user['user_id']).first()
             if alist and have_user:
-                self.ani_db.delete('list_status', 'user_id = %s', [user['user_id']])
+                self.di.delete_list_by_user_id(user['user_id'])
             elif not alist:
-                self.ani_db.commit()
                 return False
-            self.ani_db.add_animelist(user['user_id'], alist)
-            self.ani_db.commit()
+            self.di.insert_new_animelist(user['user_id'], alist)
 
     def update_ani_list_status(self):
-        userlist_ani = self.ani_db.select('mal_nick, mal_uid', 'users', 'service = %s', ['Anilist'])
+        userlist_ani = self.di.select_service_users_ids('Anilist').all()
         for user_entry in userlist_ani:
             print(user_entry[0], '-> got profile data')
             if not user_entry[1]:
@@ -210,19 +209,18 @@ class ListImporter:
                 answer = response.json()
                 user_id = answer['data']['User']['id']
                 print(user_id)
-                sleep(2)
-                self.ani_db.update('users', 'mal_uid = %s', [user_id], 'mal_nick = %s', [user_entry[1]])
+                sleep(config.jikan_delay)
+                self.di.update_users_service_id_for_service_nick(user_id, user_entry[1])
             else:
                 user_id = user_entry[1]
             alist = self.get_animelist_anilist(user_entry[0])
-            have_user = self.ani_db.select('user_id', 'list_status', 'user_id = %s', [user_id])
+            # todo prevent service id collisions here
+            have_user = self.di.select_user_is_in_list_status(user_id)
             if alist and have_user:
-                self.ani_db.delete('list_status', 'user_id = %s', [user_id])
+                self.di.delete_list_by_user_id(user_id)
             elif not alist:
-                self.ani_db.commit()
                 return False
-            self.ani_db.add_animelist(user_id, alist)
-            self.ani_db.commit()
+            self.di.insert_new_animelist(user_id, alist)
 
 
 if __name__ == '__main__':
