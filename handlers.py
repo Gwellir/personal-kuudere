@@ -1,16 +1,15 @@
 # config
+import os
+
+from jikanpy import APIException
+
 import config
 # telegram bot
-from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler)
 from telegram import (ParseMode, InlineQueryResultCachedMpeg4Gif, InlineKeyboardMarkup, InlineKeyboardButton)
 from telegram.utils.helpers import mention_html
 # my classes
-from db_wrapper import DBInterface
 from entity_data import AnimeEntry
-from feed_parser import TorrentFeedParser
-from list_parser import ListImporter
 # service wrappers
-from jikanpy import Jikan
 from saucenao import SauceNao
 # additional utilities
 import logging
@@ -21,11 +20,12 @@ from collections import namedtuple, defaultdict
 import inspect
 from random import choice as rand_choice
 import re
-import html
 from time import sleep
 from pprint import pprint
 from datetime import datetime
 import argparse
+from PIL import Image
+from io import BufferedWriter, BytesIO, BufferedReader
 
 
 # todo inline keyboard builder shouldn't be here
@@ -59,80 +59,118 @@ def detect_unused_handlers(handlers_structure):
 
 
 class UtilityFunctions:
-    def __init__(self, ani_db, jikan):
-        self.ani_db = ani_db
+    def __init__(self, jikan, di):
+        """
+
+        :param jikan:
+        :param di: DataInterface DB connector instance
+        :type di: :class:`db_wrapper2.DataInterface`
+        """
         self.jikan = jikan
+        self.di = di
 
     # todo subscription (or delivery) for anime which is unavailable in users' preferred res
     def torrent_subscribe(self, uid, aid):
         PRIORITY_GROUPS = ['HorribleSubs', 'Erai-raws']
-        group_list = [entry[0] for entry in self.ani_db.select('distinct af.a_group, u.preferred_res',
-                                                               'anifeeds af join users u on TRUE',
-                                                               'mal_aid = %s and u.preferred_res = af.resolution and u.id = %s',
-                                                               [aid, uid])]
+        group_list = [entry[0] for entry in self.di.select_group_list_for_user(aid, uid).all()]
         pprint(group_list)
         if not group_list:
-            self.ani_db._cursor.execute("insert into users_x_tracked (user_id, mal_aid, last_ep, a_group)"
-                                        "values (%s, %s, %s, %s)", (uid, aid, 0, 'HorribleSubs'))
+            self.di.insert_new_tracked_title(uid, aid, 0, 'HorribleSubs')
             return False
-        # result = False
         for group in PRIORITY_GROUPS:
             if group in group_list:
                 result = group
-                self.ani_db._cursor.execute("insert into users_x_tracked (user_id, mal_aid, last_ep, a_group)"
-                                            "values (%s, %s, %s, %s)", (uid, aid, 0, group))
+                self.di.insert_new_tracked_title(uid, aid, 0, group)
                 break
         else:
             result = group_list[0]
-            self.ani_db._cursor.execute("insert into users_x_tracked (user_id, mal_aid, last_ep, a_group)"
-                                        "values (%s, %s, %s, %s)", (uid, aid, 0, result))
-        self.ani_db.commit()
+            self.di.insert_new_tracked_title(uid, aid, 0, result)
         return result
 
     def torrent_unsubscribe(self, uid, aid):
-        self.ani_db.delete('users_x_tracked', 'user_id = %s and mal_aid = %s', [uid, aid])
-        self.ani_db.commit()
+        self.di.delete_tracked_anime(uid, aid)
         return True
 
     def store_anime(self, a_entry):
-        local_entry = self.ani_db.select('*', 'anime', 'mal_aid = %s', [a_entry.mal_id])
-        if not local_entry:
-            self.ani_db._cursor.execute("insert into anime values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                                        (a_entry.mal_id, a_entry.title, a_entry.title_english, a_entry.title_japanese,
-                                         a_entry.synopsis, a_entry.type,
-                                         a_entry.aired['from'][:10] if a_entry.aired['from'] else None,
-                                         a_entry.aired['to'][:10] if a_entry.aired['to'] else None,
-                                         None, None, a_entry.episodes, a_entry.image_url, a_entry.score, a_entry.status,
-                                         ))
-            self.ani_db.commit()
-        elif local_entry and not local_entry[0][2]:
-            self.ani_db.update('anime', "title_eng = %s, title_jap = %s, ended_at = %s, status = %s",
-                               [a_entry.title_english, a_entry.title_japanese,
-                                a_entry.aired['to'][:10] if a_entry.aired['to'] else None, a_entry.status],
-                               'mal_aid = %s', [a_entry.mal_id])
-            self.ani_db.commit()
+        self.di.upsert_anime_entry(a_entry)
+
+    # todo obsolete used by anime_walker (scrapper)
+    def get_anime_by_aid(self, mal_aid):
+        local_result = self.di.select_anime_by_id(mal_aid).first()
+        if not local_result or not local_result.popularity:
+            anime = self.jikan.anime(mal_aid)
+            sleep(config.jikan_delay)
+            output = AnimeEntry(**anime)
+            self.store_anime(output)
+        else:
+            output = local_result
+        return output
 
     def get_anime_info(self, query):
-        j_result = self.jikan.search('anime', query, parameters={'limit': 5})
-        sleep(2)
-        results = j_result['results']
-        local_result = None
-        # local_result = self.ani_db.select('*', 'anime', 'mal_aid = %s', [results[0]['mal_id']])
-        if not local_result:
-            anime = self.jikan.anime(results[0]['mal_id'])
-            sleep(2)
-        # pprint(anime)
-        output = AnimeEntry(**anime)
-        self.store_anime(output)
+        mal_info = self.lookup_anime_info_by_title(query)
+        if mal_info:
+            anime = self.di.select_anime_by_id(mal_info[0][0]).first()
+            # todo it kinda seems that I'm retarded...
+            output = AnimeEntry(title=anime.title, type=anime.show_type, status=anime.status, episodes=anime.eps,
+                aired={'from': str(anime.started_at), 'to': str(anime.ended_at)}, score=anime.score, image_url=anime.img_url,
+                synopsis=anime.synopsis, url=f'https://myanimelist.net/anime/{anime.mal_aid}', airing=None, background=None,
+                broadcast=None, duration=None, ending_themes=None, favorites=None, genres=None, headers=None, jikan_url=None,
+                licensors=None, mal_id=None, members=None, opening_themes=None, popularity=None, premiered=None,
+                producers=None, rank=None, rating=None, related=None, request_cache_expiry=None, request_cached=None,
+                request_hash=None, scored_by=None, source=None, studios=None, title_english=None, title_japanese=None,
+                title_synonyms=None, trailer_url=None)
+        else:
+            output = None
         return output
+
+    # todo add streamlined search in cached base
+    def lookup_anime_info_by_title(self, a_title, ongoing=False):
+        mal_info = self.di.select_anime_info_by_exact_synonym(a_title)
+        if not mal_info:
+            mal_info = self.di.select_anime_info_by_synonym_part(a_title)
+        if not mal_info:
+            mal_info = self.di.select_anime_info_by_ordered_token_regex(a_title)
+        if not mal_info:
+            print(f'Looking up "{a_title}" on MAL...')
+            if ongoing:
+                try:
+                    search_results = self.jikan.search('anime', a_title, page=1,
+                                                       parameters={'type': 'tv', 'status': 'airing', 'limit': 5,
+                                                                   'genre': 15,
+                                                                   'genre_exclude': 0})
+                except APIException:
+                    return None
+            else:
+                try:
+                    search_results = self.jikan.search('anime', a_title, page=1,
+                                                       parameters={'limit': 5})
+                except APIException:
+                    return None
+            sleep(config.jikan_delay)
+
+            mal_info = [(result['mal_id'], result['title'], result['airing'], result['type'], result['members'])
+                        for result in search_results['results']]
+        else:
+            mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
+        if ongoing:
+            mal_info = list(filter(lambda entry: entry[2] is True, mal_info))
+        return mal_info
 
 
 class HandlersStructure:
-    def __init__(self, updater, ani_db, jikan):
+    def __init__(self, updater, jikan, di):
+        """
+        Initializes requirements for handlers
+
+        :param updater:
+        :param jikan:
+        :param di: DataInterface DB connector instance
+        :type di: :class:`db_wrapper2.DataInterface`
+        """
         self.updater = updater
-        self.ani_db = ani_db
+        self.di = di
         self.jikan = jikan
-        self.utilities = UtilityFunctions(ani_db, jikan)
+        self.utilities = UtilityFunctions(jikan, di)
         self.handlers_list = HandlersList(
             [
                 # these commands can be used in group chats
@@ -150,6 +188,7 @@ class HandlersStructure:
                 {'command': ['future'], 'function': self.show_awaited},
                 {'command': ['random'], 'function': self.random_choice},
                 {'command': ['users'], 'function': self.users_stats},
+                {'message': 'sticker', 'function': self.convert_webp},
             ],
             [
                 # redirects non-groupchat commands in group chats to an empty handler
@@ -198,14 +237,14 @@ class HandlersStructure:
                                  text="Бот некоторого аниме-чатика, для регистрации в привате бота введите /reg или /register")
 
     def info(self, update, context):
-        info_post = self.ani_db.select('content, markdown', 'quotes', 'keyword = %s order by id', ['info'])
-        if info_post[0][1] == 'HTML':
+        info_post = self.di.select_info_post_from_quotes().first()
+        if info_post[1] == 'HTML':
             pm = ParseMode.HTML
-        elif info_post[0][1] == 'MD':
+        elif info_post[1] == 'MD':
             pm = ParseMode.MARKDOWN
         else:
             pm = None
-        context.bot.send_message(chat_id=update.effective_chat.id, text=info_post[0][0], parse_mode=pm,
+        context.bot.send_message(chat_id=update.effective_chat.id, text=info_post[0], parse_mode=pm,
                                  disable_web_page_preview=True)
 
     def random_choice(self, update, context):
@@ -227,14 +266,12 @@ class HandlersStructure:
 
         params = parse_random_command(context.args)
         if not context.args:
-            if update.effective_user.id not in [entry[0] for entry in self.ani_db.select('tg_id', 'users')]:
+            user_list = [entry[0] for entry in self.di.select_user_tg_ids().all()]
+            if update.effective_user.id not in user_list:
                 context.bot.send_message(chat_id=update.effective_chat.id,
                                          text='Вы не зарегистрированы на боте, используйте /reg в моём привате!')
                 return
-            ptw_list = self.ani_db.select('title, mal_aid', 'list_status ls join users u on ls.user_id = u.mal_uid',
-                                          'u.tg_id = %s and ls.status = %s and ls.airing != %s',
-                                          [update.effective_user.id, 6,  # PTW
-                                           3])  # not not_yet_aired
+            ptw_list = self.di.select_ptw_list_by_user_tg_id(update.effective_user.id).all()
             answer = None
             if ptw_list:
                 answer = rand_choice(ptw_list)
@@ -243,10 +280,7 @@ class HandlersStructure:
                 if answer else 'в PTW не найдено тайтлов'
         elif params and not params.score:
             mal_nicks = params.users
-            ptw_list = self.ani_db.select('title, mal_aid', 'list_status ls join users u on ls.user_id = u.mal_uid',
-                                          "u.mal_nick in (%s) and ls.status = %s and ls.airing != %s",
-                                          [','.join(mal_nicks), 6,  # PTW
-                                           3])  # not not_yet_aired
+            ptw_list = self.di.select_ptw_lists_by_usernames(mal_nicks).all()
             answer = None
             if ptw_list:
                 answer = rand_choice(ptw_list)
@@ -270,8 +304,7 @@ class HandlersStructure:
                 if params.score[0] not in range(1, 11) or params.score[1] not in range(1, 11):
                     msg = 'Оценка должна быть в диапазоне от 1 до 10'
                 else:
-                    registered_users = [entry[0].lower() for entry in self.ani_db.select('mal_nick', 'users',
-                                                                                         'mal_nick is not NULL', [])]
+                    registered_users = [entry[0].lower() for entry in self.di.select_registered_user_nicks().all()]
                     if params.users:
                         legit_users = [user.lower() for user in params.users if user.lower() in registered_users]
                     else:
@@ -280,16 +313,11 @@ class HandlersStructure:
                         types_lower = [type_.lower() for type_ in params.type]
                     else:
                         types_lower = ['tv', 'ova', 'movie', 'ona', 'special', 'unknown', 'music', 'other']
-                    high_score_list = self.ani_db.select('distinct title, mal_aid, u.mal_nick, ls.show_type',
-                                                         'list_status ls join users u on ls.user_id = u.mal_uid',
-                                                         'ls.status = %s and ls.score >= %s and ls.score <= %s '
-                                                         'and ls.user_id not in (%s)',
-                                                         [2, params.score[0], params.score[1], ','.join(ignored_list)])  # ignoring superlists
-                    your_list = [entry[0] for entry in self.ani_db.select('mal_aid',
-                                                                          'list_status ls join users u on ls.user_id = u.mal_uid',
-                                                                          'u.tg_id = %s and ls.status != %s',
-                                                                          [update.effective_user.id, 6])]
-                    recommended_list = [entry for entry in high_score_list
+                    list_by_score = self.di.select_watched_titles_in_score_interval(params.score[0], params.score[1],
+                                                                                      ignored_list).all()
+                    your_list = [entry[0] for entry in
+                                 self.di.select_watched_list_by_user_tg_id(update.effective_user.id).all()]
+                    recommended_list = [entry for entry in list_by_score
                                         if entry[2].lower() in legit_users
                                         and entry[3].lower() in types_lower
                                         and entry[1] not in your_list]
@@ -310,18 +338,18 @@ class HandlersStructure:
     def quotes(self, update, context):
         q = ' '.join(context.args)
         if q:
-            q_entry = self.ani_db.select('content, markdown', 'quotes', 'keyword = %s', [q])
+            q_entry = self.di.select_quotes_by_keyword(q).all()
             if q_entry:
                 pm = ParseMode.HTML if q_entry[0][1] == 'HTML' else None
                 context.bot.send_message(chat_id=update.effective_chat.id,
                                          text=f'{q}:\n\n{q_entry[0][0]}', parse_mode=pm)
             else:
-                q_entry = self.ani_db.select('keyword', 'quotes', 'keyword like %s', [f'%{q}%'])
+                q_entry = self.di.select_quotes_like_keyword(q).all()
                 variants = '\n'.join([v[0] for v in sorted(q_entry, key=lambda item: len(item[0][0]))[:5]])
                 msg = f'Не найдено: "{q}"\nПохожие варианты:\n{variants}'
                 context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
         else:
-            quote_list = [f'"{e[0]}"' for e in self.ani_db.select('keyword', 'quotes order by id')]
+            quote_list = [f'"{e[0]}"' for e in self.di.select_all_quote_keywords().all()]
             show_limit = 50
             msg = (', '.join(quote_list[:show_limit]) +
                    (f'... (+{len(quote_list) - show_limit})' if len(quote_list) > show_limit else '') + '\n\n') \
@@ -334,67 +362,65 @@ class HandlersStructure:
         q = context.args
         if q:
             uid = update.effective_user.id
-            if uid not in [e[0] for e in self.ani_db.select('tg_id', 'users', 'tg_id is not %s', [None])]:
+            users_id_list = self.di.select_user_tg_ids().all()
+            if uid not in [e[0] for e in users_id_list]:
                 update.effective_message.reply_text("Вы не авторизованы для использования цитатника,"
                                                     " зарегистрируйтесь в моём привате командой /reg.")
                 return
             params = str.split(update.effective_message.text, ' ', 2)
             a = params[2] if len(params) > 2 else None
             name = q[0].replace("_", " ")
-            q_list = self.ani_db.select('keyword, author_id', 'quotes', 'keyword = %s', [name])
+            q_list = self.di.select_quote_author_by_keyword(name).first()
             if q_list:
                 if q_list[0][1] != uid:
                     update.effective_message.reply_text("Этот идентификатор принадлежит чужой цитате!")
                 elif not a:
-                    self.ani_db.delete('quotes', 'keyword = %s', [name])
+                    self.di.delete_quotes_by_keyword(name)
                     update.effective_message.reply_text(f'Цитата "{name}" удалена!')
                 else:
-                    self.ani_db.update('quotes', 'content = %s', [a], 'keyword = %s', [name])
+                    self.di.update_quote_by_keyword(name, a)
                     context.bot.send_message(chat_id=update.effective_chat.id,
                                              text=f'Задано:\n"<b>{name}</b>"\n"{a}".', parse_mode=ParseMode.HTML)
             elif a:
-                self.ani_db.add_quote((name, a, None, uid))
+                self.di.insert_new_quote(name, a, None, uid)
                 context.bot.send_message(chat_id=update.effective_chat.id,
                                          text=f'Задано:\n"<b>{name}</b>"\n"{a}".', parse_mode=ParseMode.HTML)
             else:
                 update.effective_message.reply_text("Цитата не может быть пустой!")
-            self.ani_db.commit()
         else:
             context.bot.send_message(chat_id=update.effective_chat.id,
                                      text=f'Применение:\n<code>/set_q &lt;имя_цитаты&gt; &lt;цитата&gt;</code>.',
                                      parse_mode=ParseMode.HTML)
 
     def show_stats(self, update, context):
-        watched = self.ani_db.select('*', 'full_tracking')
-        total = self.ani_db.select('count(mal_aid)', 'ongoings')
-        active_users_count = self.ani_db.select('count(tg_id)', 'users')
+        watched = self.di.select_all_tracked_titles().all()
+        total = self.di.select_ongoing_ids().count()
+        active_users_count = self.di.select_user_tg_ids().count()
         stats_limit = 15
         watched_str = f'Топ-{stats_limit} отслеживаемых:\n' + \
                       '\n'.join([f'{t[2]:>2}: <a href="https://myanimelist.net/anime/{t[1]}">{t[0]}</a>'
                                  for t in watched][:stats_limit]) + '\n\n'
-        msg = (watched_str if watched else '') + f'Всего онгоингов отслеживается: {total[0][0]}.\n' \
-                                                 f'Зарегистрированных пользователей: {active_users_count[0][0]}.\n'
+        msg = (watched_str if watched else '') + f'Всего онгоингов отслеживается: {total}.\n' \
+                                                 f'Зарегистрированных пользователей: {active_users_count}.\n'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                                  disable_web_page_preview=True)
 
     def users_stats(self, update, context):
         q = context.args
         if len(q) > 0 and q[0] == 'season':
-            users = '\n'.join([u[0] for u in self.ani_db.select(
-                'distinct mal_nick', 'list_status join users on users.mal_uid = list_status.user_id',
-                'status = %s and airing = %s and show_type = %s', [1, 1, 'TV'])])
+            users = '\n'.join([u[0] for u in
+                               self.di.select_users_with_ongoing_titles_in_list().all()])
             msg = f'Активные пользователи:\n{users}'
         else:
-            users = '\n'.join([f'{u[1]} - {u[0]}' for u in self.ani_db.select('distinct mal_nick, tg_nick',
-                                                                'list_status l join users u on u.mal_uid = l.user_id')])
+            users = '\n'.join([f'{u[1]} - {u[0]}' for u in
+                               self.di.select_users_with_any_titles_in_list().all()])
             msg = f'Список пользователей:\n{users}'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
     def torrents_stats(self, update, context):
         torrents = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]}\n ({t[2]})'
-                              for t in self.ani_db.select('distinct a.title, o.last_ep, o.last_release, o.mal_aid',
-                                                          'ongoings o left join anime a on a.mal_aid = o.mal_aid '
-                                                          'order by a.title')])
+                              for t in self.di.select_all_recognized_titles_stats().all()
+                              ])
         # print(torrents)
         msg = f'Список отслеживаемых торрентов:\n{torrents}'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
@@ -402,8 +428,11 @@ class HandlersStructure:
 
     def show_lockouts(self, update, context):
         lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]} (до {t[2]})'
-                              for t in self.ani_db.select('*', 'lockout')])
-        msg = f'<b>Запрещены спойлеры по</b>:\n\n{lockouts}'
+                              for t in
+                              self.di.select_locked_out_ongoings().all()
+                              ])
+        msg = f'<b>На данный момент ({datetime.strftime(datetime.now(), "%H:%M")} по Москве)\n' \
+              f'запрещены спойлеры по</b>:\n\n{lockouts}'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                                  disable_web_page_preview=True)
 
@@ -416,12 +445,12 @@ class HandlersStructure:
                 context.bot.send_message(chat_id=update.effective_chat.id,
                                          text='Используйте как минимум три символа для поиска.')
                 return
-            awaited_s = self.ani_db.select('*', 'awaited_anime', "name like %s", [f'%{name}%'])[:20]
+            awaited_s = self.di.select_future_anime_by_producer(name).all()
             studios_str = '\n'.join([f'<a href="https://myanimelist.net/anime/{aw[0]}">{aw[1]}</a> ({aw[2]})' +
                                      (f' (c {str(aw[3])[:10]})' if aw[3] else '')
                                      for aw in awaited_s])
             studios_list = ', '.join(set([aw[4].strip() for aw in awaited_s]))
-            awaited_a = self.ani_db.select('*', 'awaited_anime', "title like %s", [f'%{name}%'])[:20]
+            awaited_a = self.di.select_future_anime_by_title(name).all()
             animes_str = '\n'.join([f'<a href="https://myanimelist.net/anime/{aw[0]}">{aw[1]}</a> ({aw[2]})' +
                                     (f' (c {str(aw[3])[:10]})' if aw[3] else '')
                                     for aw in awaited_a])
@@ -447,7 +476,7 @@ class HandlersStructure:
             uid, nick = update.effective_user.id, \
                         update.effective_user.username if update.effective_user.username else update.effective_user.full_name
 
-        user_list = self.ani_db.select('mal_nick, service', 'users', 'tg_id = %s', [uid])
+        user_list = self.di.select_user_list_address_by_tg_id(uid).all()
         if not user_list:
             update.effective_message.reply_text(f'Cписок пользователя {nick} не зарегистрирован.')
             return
@@ -470,26 +499,23 @@ class HandlersStructure:
             4: 'drop',
             6: 'PTW'
         }
+        titles = None
         if len(q) > 0:
-            titles = self.ani_db.select('distinct title, mal_aid', 'list_status', 'title like %s', [f'%{q}%'])
-            msg = ''
+            matches = self.utilities.lookup_anime_info_by_title(q)
+            if matches:
+                titles = [(entry[1], entry[0]) for entry in matches]
             if titles:
-                if len(titles) > 1:
-                    titles = sorted(titles, key=lambda item: len(item[0]), reverse=False)
                 msg = 'Найдено аниме:\n' + \
                       '\n'.join([f'<a href="https://myanimelist.net/anime/{t[1]}/">{t[0]}</a>'
                                  for t in titles[:5]]) + '\n\n'
                 title = titles[0]
-                select_seen = self.ani_db.select('u.mal_nick, l.score, l.status, l.watched',
-                                                 'list_status l join users u on l.user_id = u.mal_uid',
-                                                 'l.mal_aid = %s order by l.score desc', [title[1]])
+                select_seen = self.di.select_user_info_for_seen_title(title[1]).all()
                 watched = '\n'.join([f'{item[0]} - {"n/a" if item[1] == 0 else item[1]} '
                                      f'({status_dict[item[2]] + (f": {item[3]}" if item[2] != 2 else "")})'
                                      for item in select_seen if item[2] != 6])
                 ptw = '\n'.join([f'{item[0]} ({status_dict[item[2]]})' for item in select_seen if item[2] == 6])
-                msg += f'Оценки для тайтла:\n<b>{title[0]}</b>\n' + watched + ('\n\n' + ptw if ptw else '')
+                msg += f'Оценки для тайтла:\n<b>{title[0]}</b>\n\n' + watched + ('\n\n' + ptw if ptw else '')
                 context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
-                # users_seen = self.ani_db.select()
             else:
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено:\n<b>{q}</b>',
                                          parse_mode=ParseMode.HTML)
@@ -505,13 +531,14 @@ class HandlersStructure:
             if result:
                 mal_character_ids.append(result.group(1))
         pprint(mal_character_ids)
-        ongoing_ids = [item[0] for item in self.ani_db.select('mal_aid', 'ongoings')]
+        ongoing_ids = [item[0] for item in
+                       self.di.select_ongoing_ids().all()]
         print(ongoing_ids)
         allowed_entries = defaultdict(list)
         waifu_counter = 0
         for id in mal_character_ids:
             info = self.jikan.character(id)
-            sleep(2)
+            sleep(config.jikan_delay)
             in_anime = [(item['mal_id'], item['name']) for item in info['animeography']]
             old_anime = [anime for anime in in_anime if not (anime[0] in ongoing_ids)]
             if not old_anime:
@@ -531,19 +558,17 @@ class HandlersStructure:
 
     # todo check whether torrent file still exists
     # todo make sure old callbacks do not fuck shit up
+    # todo return more info in case when title part matches more than one title
     def track_anime(self, update, context):
-        user_id = self.ani_db.select('id', 'users', 'tg_id = %s', [update.effective_user.id])
+        user_id = self.di.select_user_id_by_tg_id(update.effective_user.id).first()
         if not user_id:
             context.bot.send_message(chat_id=update.effective_chat.id,
                                      text='Вы не зарегистрированы на боте, используйте /register в моём привате')
             return
         else:
-            user_id = user_id[0][0]
+            user_id = user_id[0]
         if not context.args:
-            tracked = self.ani_db.select('ut.mal_aid, a.title, ut.a_group',
-                                         'users_x_tracked ut join anime a on ut.mal_aid = a.mal_aid '
-                                         'join users u on u.id = ut.user_id', 'u.tg_id = %s',
-                                         [update.effective_user.id])
+            tracked = self.di.select_tracked_titles_by_user_tg_id(update.effective_user.id).all()
             if tracked:
                 tracked.sort(key=lambda item: item[1])
                 msg = 'Ваши подписки:\n\n' + '\n'.join([entry[1] for entry in tracked])
@@ -562,11 +587,10 @@ class HandlersStructure:
         q = [entry.strip() for entry in ' '.join(context.args).split(',')]
         subbed_list = []
         for title in q:
-            local_result = self.ani_db.select("o.mal_aid, a.title", "ongoings o join anime a on a.mal_aid = o.mal_aid",
-                                              "a.title like %s and a.show_type in ('TV', 'ONA')", [f'%{title}%'])
-            if len(local_result) == 1:
-                if not self.ani_db.select('mal_aid', 'users_x_tracked', 'user_id = %s and mal_aid = %s',
-                                          [user_id, local_result[0][0]]):
+            local_result = self.di.select_anime_to_track_from_ongoings_by_title(title).all()
+            local_result = sorted(local_result, key=lambda item: len(item[1]))
+            if len(local_result) >= 1:
+                if not self.di.select_anime_tracked_by_user_id_and_anime_id(user_id, local_result[0][0]).first():
                     group = self.utilities.torrent_subscribe(user_id, local_result[0][0])
                     subbed_list.append(tuple([local_result[0][0], local_result[0][1], group]))
                 else:
@@ -589,19 +613,15 @@ class HandlersStructure:
 
     def drop_anime(self, update, context):
         q = [entry.strip() for entry in ' '.join(context.args).split(',')]
-        user_id = self.ani_db.select('id', 'users', 'tg_id = %s', [update.effective_user.id])
+        user_id = self.di.select_user_id_by_tg_id(update.effective_user.id).first()
         if not user_id:
             context.bot.send_message(chat_id=update.effective_chat.id,
                                      text='Вы не зарегистрированы на боте, используйте /register в моём привате')
             return
-        else:
-            user_id = user_id[0][0]
+        user_id = user_id.id
         unsubbed_list = []
         for title in q:
-            local_result = self.ani_db.select("ut.mal_aid, a.title",
-                                              "users_x_tracked ut join anime a on a.mal_aid = ut.mal_aid",
-                                              "a.title like %s and a.show_type in ('TV', 'ONA') and ut.user_id = %s",
-                                              [f'%{title}%', user_id])
+            local_result = self.di.select_anime_tracked_by_user_id_and_title(user_id, title).all()
             if len(local_result) == 1:
                 self.utilities.torrent_unsubscribe(user_id, local_result[0][0])
                 unsubbed_list.append(local_result[0])
@@ -620,7 +640,31 @@ class HandlersStructure:
         output = self.utilities.get_anime_info(q)
         context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
                                  parse_mode=ParseMode.HTML)
-        sleep(2)
+        sleep(config.jikan_delay)
+
+    @staticmethod
+    def convert_webp(update, context):
+        sticker = update.effective_message.sticker
+        if not sticker.emoji:
+            filename = f"img/{sticker.file_unique_id}.png"
+            if not os.path.exists(filename):
+                wpo = BytesIO()
+                w_write = BufferedWriter(wpo)
+                w_read = BufferedReader(wpo)
+                file = context.bot.get_file(file_id=sticker.file_id)
+                file.download(out=w_write)
+                img = Image.open(w_read).convert("RGBA")
+                bg = Image.new("RGBA", img.size, "WHITE")
+                bg.paste(img, (0, 0), img)
+                bg.convert('RGB').save(filename, "JPEG")
+                img.close()
+                bg.close()
+                wpo.close()
+            converted = open(filename, 'rb')
+            msg = f'WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})'
+            context.bot.send_photo(chat_id=update.effective_chat.id, caption=msg, photo=converted)
+            context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+            converted.close()
 
     def ask_saucenao(self, update, context):
         photo_file_id = update.effective_message.photo[-1].file_id
@@ -664,14 +708,13 @@ class HandlersStructure:
                     return
                 q = context.args
                 tags = [item.lower().strip() for item in ' '.join(q).split(',')]
-                former_tags = set(self.ani_db.select('media_id, tag', 'gif_tags', 'media_id = %s', [attach.file_id]))
+                former_tags = set(self.di.select_gif_tags_by_media_id(attach.file_id).all())
                 v_set = set([(attach.file_id, tag,) for tag in tags])
                 v_set -= former_tags
                 values = tuple(v_set)
                 new_tags = [e[1] for e in values]
                 old_tags = [e[1] for e in former_tags]
-                self.ani_db._cursor.executemany('insert gif_tags (media_id, tag) VALUES (%s,%s)', values)
-                self.ani_db.commit()
+                self.di.insert_tags_into_gif_tags(values)
                 msg = f'Заданы теги: {new_tags}' if new_tags else 'Все эти теги уже заданы!'
                 msg += f'\nСтарые теги: {old_tags}' if old_tags else ''
                 update.effective_message.reply_text(msg)
@@ -679,17 +722,15 @@ class HandlersStructure:
     def register_user(self, update, context):
         user_name = update.effective_user.username
         user_id = update.effective_user.id
-        this_user = self.ani_db.select('*', 'users', 'tg_nick = %s', [user_name])
+        this_user = self.di.select_user_data_by_nick(user_name).all()
         if this_user:
-            if not this_user[0][2]:
-                self.ani_db.update('users', 'tg_id = %s', [user_id], 'tg_nick = %s', [user_name])
+            if not this_user[0].tg_id:
+                self.di.update_users_id_for_manually_added_lists(user_id, user_name)
             # else:
             #     context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже зарегистрированы!')
             #     return
         else:
-            self.ani_db._cursor.execute('insert users (tg_nick, tg_id) values (%s, %s)',
-                                        [user_name, user_id])
-        self.ani_db.commit()
+            self.di.insert_new_user(user_name, user_id)
         msg = 'Вы зарегистрированы!\nВыберите предпочитаемое разрешение видео для доставки торрентов (по умолчанию 720р).\n' \
               '\nЗатем можете использовать команду /track <набор частей названий через запятую>, ' \
               'чтобы добавить аниме в список отслеживания'
@@ -708,8 +749,10 @@ class HandlersStructure:
         if tag_list:
             tag_iter = ','.join(['%s' for _ in tag_list])
             tag_list.extend([len(tag_list)])
-            res = self.ani_db.select('media_id', 'gif_tags',
-                                     f'tag IN ({tag_iter}) group by media_id having count(media_id) = %s', tag_list)
+            # res = self.ani_db.select('media_id', 'gif_tags',
+            #                          f'tag IN ({tag_iter}) group by media_id having count(media_id) = %s', tag_list)
+            # todo THIS IS NOT FINISHED (but gif tagger isn't working anyway)
+            res = self.di.select_gifs_by_tags().all()
             print(res)
             results = [InlineQueryResultCachedMpeg4Gif(type='mpeg4_gif', id=uuid.uuid4(), mpeg4_file_id=r[0]) for r in
                        res]
@@ -723,10 +766,7 @@ class HandlersStructure:
         pprint(args)
         if args[0] == "cg":
             # todo think how to pass preferred resolution for user here
-            group_list = [entry[0] for entry in self.ani_db.select('distinct af.a_group, u.preferred_res',
-                                                                   'anifeeds af join users u on TRUE',
-                                                                   'mal_aid = %s and u.preferred_res = af.resolution and u.id = %s',
-                                                                   [args[2], args[1]])]
+            group_list = [entry[0] for entry in self.di.select_group_list_for_user(args[2], args[1]).all()]
             if group_list:
                 button_list = [InlineKeyboardButton(entry, callback_data=f"sg {args[1]} {args[2]} {entry}")
                                for entry in group_list]
@@ -738,14 +778,11 @@ class HandlersStructure:
                 context.bot.send_message(chat_id=update.effective_chat.id,
                                          text=f"Пока что информация о сабберах отсутствует.")
         elif args[0] == "sg":
-            self.ani_db.update('users_x_tracked', 'a_group = %s, last_ep = %s', [args[3], 0],
-                               'user_id = %s and mal_aid = %s', [args[1], args[2]])
-            self.ani_db.commit()
+            self.di.update_group_for_users_release_tracking(args[3], args[1], args[2])
             self.deliver_last(update.effective_user.id)
             q.edit_message_text(text=update.effective_message.text + f"\n\nВыбрана группа:\n{args[3]}")
         elif args[0] == "sr":
-            self.ani_db.update('users', 'preferred_res = %s', [args[2]], 'tg_id = %s', [args[1]])
-            self.ani_db.commit()
+            self.di.update_users_preferred_resolution(args[2], args[1])
             q.edit_message_text(text=update.effective_message.text + f"\n\nВыбрано качество:\n{args[2]}p")
 
     def unauthed(self, update, context):
@@ -800,11 +837,13 @@ class HandlersStructure:
     #     self.deliver_torrents()
 
     def deliver_last(self, tg_id):
-        entries = self.ani_db.select('*', 'last_episodes', 'tg_id = %s', [tg_id])  # this is a view
+        entries = self.di.select_last_episodes(tg_id).all()
         for entry in entries:
-            self.updater.bot.send_document(chat_id=entry[0], document=open(entry[1], 'rb'),
-                                      caption=entry[1].rsplit('/', 1)[1])
-            self.ani_db.update('users_x_tracked', 'last_ep = %s', [entry[2]],
-                               'user_id = %s AND mal_aid = %s AND a_group = %s AND last_ep < %s',
-                               [entry[4], entry[3], entry[5], entry[2]])
-            self.ani_db.commit()
+            try:
+                file = open(entry.torrent, 'rb')
+                self.updater.bot.send_document(chat_id=entry.tg_id, document=file,
+                                               caption=entry.torrent.rsplit('/', 1)[1])
+                self.di.update_release_status_for_user_after_delivery(entry.episode, entry.id, entry.mal_aid, entry.a_group)
+            except FileNotFoundError:
+                # todo add redownload logic
+                self.updater.bot.send_message(chat_id=entry.tg_id, text=f"NOT FOUND:\n{entry.torrent.rsplit('/', 1)[1]}")
