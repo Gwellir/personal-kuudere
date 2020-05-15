@@ -118,7 +118,7 @@ def parse_feed_title(a_title):
         if ep_number.group('season'):
             a_title += ep_number.group('season')
         a_title = match_multiple_spaces.sub(' ', a_title.strip())
-    return a_ep_no, a_group, a_title, a_res, a_ext
+    return a_ep_no, a_group[:90], a_title, a_res, a_ext  # fix for group names which are too long
 
 
 def get_local_time(dtime):
@@ -230,7 +230,7 @@ class TorrentFeedParser:
         if a_ep_no and a_group and a_title:
             print(f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
                   f' ext ({a_ext if a_ext else "n/a"})')
-            mal_id = self.di.select_mal_anime_id_by_synonym(a_title).first()
+            mal_id = self.di.select_ongoing_anime_id_by_synonym(a_title).first()
             if not mal_id:
                 mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title).all()
                 if not mal_ids:
