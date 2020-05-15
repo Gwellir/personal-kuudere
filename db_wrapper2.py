@@ -298,9 +298,9 @@ class DataInterface:
         return session.query(AniFeeds).filter(AniFeeds.checked == False).order_by(AniFeeds.date)
 
     @staticmethod
-    def select_mal_anime_id_by_synonym(synonym):
-        return session.query(AnimeXSynonyms).\
-            filter(AnimeXSynonyms.synonym == synonym).\
+    def select_ongoing_anime_id_by_synonym(synonym):
+        return session.query(AnimeXSynonyms).join(Anime).\
+            filter(AnimeXSynonyms.synonym == synonym, Anime.status != 'Finished Airing').\
             with_entities(AnimeXSynonyms.mal_aid)
 
     # todo fix ListStatus dependancy
