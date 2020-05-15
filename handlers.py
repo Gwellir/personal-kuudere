@@ -22,7 +22,7 @@ from random import choice as rand_choice
 import re
 from time import sleep
 from pprint import pprint
-from datetime import datetime
+from datetime import datetime, timedelta
 import argparse
 from PIL import Image
 from io import BufferedWriter, BytesIO, BufferedReader
@@ -372,7 +372,7 @@ class HandlersStructure:
             name = q[0].replace("_", " ")
             q_list = self.di.select_quote_author_by_keyword(name).first()
             if q_list:
-                if q_list[0][1] != uid:
+                if q_list[1] != uid:
                     update.effective_message.reply_text("Этот идентификатор принадлежит чужой цитате!")
                 elif not a:
                     self.di.delete_quotes_by_keyword(name)
@@ -427,7 +427,8 @@ class HandlersStructure:
                                  disable_web_page_preview=True)
 
     def show_lockouts(self, update, context):
-        lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]} (до {t[2]})'
+        lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">'
+                              f'{t[0]}</a> ep {t[1]} (до {t[2] + timedelta(hours=24)})'
                               for t in
                               self.di.select_locked_out_ongoings().all()
                               ])
