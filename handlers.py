@@ -189,6 +189,7 @@ class HandlersStructure:
                 {'command': ['random'], 'function': self.random_choice},
                 {'command': ['users'], 'function': self.users_stats},
                 {'message': 'sticker', 'function': self.convert_webp},
+                {'command': ['source'], 'function': self.ask_saucenao},
             ],
             [
                 # redirects non-groupchat commands in group chats to an empty handler
@@ -668,7 +669,11 @@ class HandlersStructure:
             converted.close()
 
     def ask_saucenao(self, update, context):
-        photo_file_id = update.effective_message.photo[-1].file_id
+        photo_file_id = None
+        if update.effective_message.photo:
+            photo_file_id = update.effective_message.photo[-1].file_id
+        elif update.effective_message.reply_to_message.photo:
+            photo_file_id = update.effective_message.reply_to_message.photo[-1].file_id
         if photo_file_id:
             file = context.bot.get_file(file_id=photo_file_id)
             name = f'{str(uuid.uuid4())}.jpg'
@@ -723,14 +728,16 @@ class HandlersStructure:
     def register_user(self, update, context):
         user_name = update.effective_user.username
         user_id = update.effective_user.id
-        this_user = self.di.select_user_data_by_nick(user_name).all()
-        if this_user:
-            if not this_user[0].tg_id:
-                self.di.update_users_id_for_manually_added_lists(user_id, user_name)
-            # else:
-            #     context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже зарегистрированы!')
-            #     return
-        else:
+        if user_name:
+            this_user = self.di.select_user_data_by_nick(user_name).all()
+            if this_user:
+                if not this_user[0].tg_id:
+                    self.di.update_users_id_for_manually_added_lists(user_id, user_name)
+                # else:
+                #     context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже зарегистрированы!')
+                #     return
+        if user_id not in self.di.select_user_tg_ids().all():
+            # print(user_id, self.di.select_user_tg_ids().all())
             self.di.insert_new_user(user_name, user_id)
         msg = 'Вы зарегистрированы!\nВыберите предпочитаемое разрешение видео для доставки торрентов (по умолчанию 720р).\n' \
               '\nЗатем можете использовать команду /track <набор частей названий через запятую>, ' \

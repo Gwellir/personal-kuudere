@@ -32,7 +32,8 @@ class DataInterface:
 
     @staticmethod
     def select_user_tg_ids():
-        return session.query(Users).filter(Users.tg_id != None).with_entities(Users.tg_id)
+        id_list = [_id[0] for _id in session.query(Users).filter(Users.tg_id != None).with_entities(Users.tg_id)]
+        return id_list
         
     @staticmethod
     def select_ptw_list_by_user_tg_id(user_tg_id):
