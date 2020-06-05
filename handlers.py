@@ -477,7 +477,7 @@ class HandlersStructure:
             uid, nick = update.effective_user.id, \
                         update.effective_user.username if update.effective_user.username else update.effective_user.full_name
 
-        user_list = self.di.select_user_list_address_by_tg_id(uid).all()
+        user_list = self.di.select_user_list_address_by_tg_id(uid).first()
         if not user_list:
             update.effective_message.reply_text(f'Cписок пользователя {nick} не зарегистрирован.')
             return
@@ -485,7 +485,7 @@ class HandlersStructure:
             'MAL': 'https://myanimelist.net/animelist/%s',
             'Anilist': 'https://anilist.co/user/%s/animelist'
         }
-        list_link = list_prefixes[user_list[0][1]] % user_list[0][0]
+        list_link = list_prefixes[user_list[1]] % user_list[0]
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text=f'Зарегистрированный список пользователя {nick}:\n{list_link}')
 

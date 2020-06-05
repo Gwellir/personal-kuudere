@@ -209,13 +209,13 @@ class TorrentFeedParser:
             self.read_article_feed(feed)
         release_list = self.di.select_unchecked_feed_entries().all()
         for release in release_list:
-            self.do_recognize(release.title, release.link, parse_size(release.description))  # just use a fucking hash as torrent identity
+            self.do_recognize(release.title, release.date, release.link, parse_size(release.description))  # just use a fucking hash as torrent identity
 
     # todo batch parsing and delivery (possibly subscribe for complete seasons?)
     # todo fix parentheses adding spare spaces to recognized title name
     # todo avoid accidentally hitting SQL VARCHAR column size limits
     # todo version/recap parsing
-    def do_recognize(self, a_title, torrent_link, file_size):
+    def do_recognize(self, a_title, a_date, torrent_link, file_size):
         """
         Tries to recognize a parsed title of an anime release, match it to its MAL entry, store relevant information
         in DB and save related torrent file for potential further delivery.
@@ -257,12 +257,12 @@ class TorrentFeedParser:
                     self.di.insert_new_synonyms(mal_id, a_title)
             else:
                 pass
-            self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title)
+            self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title, a_date)
             if mal_id:
                 self.torrent_save(mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size)
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
-            self.di.update_anifeeds_unrecognized_entry(file_size, save_title)
+            self.di.update_anifeeds_unrecognized_entry(file_size, save_title, a_date)
         return
 
     # todo implement actual check for files which failed to download

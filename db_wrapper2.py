@@ -306,10 +306,10 @@ class DataInterface:
     # todo fix ListStatus dependancy
     @staticmethod
     def select_mal_anime_ids_by_title_part(title):
-        return session.query(ListStatus).\
-            filter(ListStatus.show_type.in_(TYPE_LIST), ListStatus.status == 1).\
-            filter(ListStatus.title.like(f'%{title}%')).\
-            with_entities(ListStatus.mal_aid).\
+        return session.query(Ongoings).join(Anime).\
+            filter(Anime.show_type.in_(TYPE_LIST), Anime.status != 'Finished Airing').\
+            filter(Anime.title.like(f'%{title}%')).\
+            with_entities(Ongoings.mal_aid).\
             distinct()
 
     @staticmethod
@@ -602,8 +602,8 @@ class DataInterface:
         # br.edit_data(q)
 
     @staticmethod
-    def update_anifeeds_with_parsed_information(mal_aid, a_group, resolution, episode, size, title):
-        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title).first()
+    def update_anifeeds_with_parsed_information(mal_aid, a_group, resolution, episode, size, title, date):
+        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title, AniFeeds.date == date).first()
         feed_entry.mal_aid = mal_aid
         feed_entry.a_group = a_group
         feed_entry.resolution = resolution
@@ -617,8 +617,8 @@ class DataInterface:
         # br.edit_data(q)
 
     @staticmethod
-    def update_anifeeds_unrecognized_entry(size, title):
-        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title).first()
+    def update_anifeeds_unrecognized_entry(size, title, date):
+        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title, AniFeeds.date == date).first()
         feed_entry.size = size
         feed_entry.checked = 1
         session.commit()
