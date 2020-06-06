@@ -7,6 +7,7 @@ from pprint import pprint
 from time import sleep
 from collections import Counter
 import requests
+from jikanpy import APIException
 from pytz import timezone
 from datetime import datetime, timedelta
 
@@ -234,19 +235,25 @@ class TorrentFeedParser:
             if not mal_id:
                 mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title).all()
                 if not mal_ids:
-                    search_results = self.jikan.search('anime', a_title, page=2,
-                                           parameters={'type': 'tv', 'status': 'airing', 'limit': 5, 'genre': 15,
-                                                       'genre_exclude': 0})
-                    sleep(2)
-                    # test for legit episode numbers as MAL sometimes returns very strange title matches
-                    mal_ids = [(result['mal_id'],) for result in search_results['results']
-                               if (result['episodes'] == 0 or result['episodes'] >= int(a_ep_no))]
+                    search_results = None
+                    try:
+                        search_results = self.jikan.search('anime', a_title, page=2,
+                                                           parameters={'type': 'tv', 'status': 'airing', 'limit': 5,
+                                                                       'genre': 15,
+                                                                       'genre_exclude': 0})
+                        # test for legit episode numbers as MAL sometimes returns very strange title matches
+                        mal_ids = [(result['mal_id'],) for result in search_results['results']
+                                   if (result['episodes'] == 0 or result['episodes'] >= int(a_ep_no))]
+                    except APIException:
+                        pass
+                    sleep(4)
                 if len(mal_ids) == 1:
                     print(mal_ids[0])
                     mal_id = mal_ids[0]
                 else:
                     print(f"Can't get a precise result... {mal_ids}")
-                    mal_id = title_compare(search_results['results'], a_title)
+                    if search_results:
+                        mal_id = title_compare(search_results['results'], a_title)
                 # check whether we have title info
                 if mal_id:
                     if not self.di.select_anime_id_is_in_database(mal_id).first():
