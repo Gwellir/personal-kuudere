@@ -509,7 +509,7 @@ class DataInterface:
 
     @staticmethod
     def insert_new_synonyms(mal_aid, a_title):
-        synonym = AnimeXSynonyms(title=a_title, mal_aid=mal_aid)
+        synonym = AnimeXSynonyms(synonym=a_title, mal_aid=mal_aid)
         session.add(synonym)
         session.commit()
 
