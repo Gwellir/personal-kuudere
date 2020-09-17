@@ -1,20 +1,27 @@
 import config
 from telegram import ParseMode
 from telegram.error import BadRequest
+from anime_synonyms import Synonyms
 
 
 class BotJobs:
-    def __init__(self, updater, feed_parser, list_importer, di):
+    def __init__(self, updater, feed_parser, list_importer, data_interface, synonyms):
         """
         Initializes requirements for jobs
 
-        :param di: DataInterface DB connector instance
-        :type di: :class:`db_wrapper2.DataInterface`
+        :param data_interface: DataInterface DB connector instance
+        :type data_interface: :class:`db_wrapper2.DataInterface`
+        :param list_importer: ListImporter instance
+        :type list_importer: :class:`list_parser.ListImporter`
+        :param synonyms: Synonyms processor instance
+        :type synonyms: :class:`anime_synonyms.Synonyms`
+
         """
         self.feed_parser = feed_parser
-        self.list_importer = list_importer
+        self.li = list_importer
         self.updater = updater
-        self.di = di
+        self.di = data_interface
+        self.syn = synonyms
 
     def update_nyaa(self, callback):
         self.feed_parser.check_feeds()
@@ -30,7 +37,7 @@ class BotJobs:
                                           disable_web_page_preview=True)
 
     def update_lists(self, callback):
-        self.list_importer.update_all()
+        self.li.update_all()
 
     # todo better way of handling episode number update
     # todo now pending_delivery runs on shitty fallback logic, fix ASAP
@@ -47,3 +54,7 @@ class BotJobs:
                 self.updater.bot.send_message(chat_id=entry[0], text=f"NOT FOUND:\n{entry[1].rsplit('/', 1)[1]}")
             except BadRequest:
                 self.updater.bot.send_message(chat_id=config.dev_tg_id, text=f"USER NOT BOUND:\n{entry[0]}")
+
+    def update_seasons(self):
+        self.li.update_seasonal()
+        self.syn.extract_synonyms()
