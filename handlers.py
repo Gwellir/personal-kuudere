@@ -135,7 +135,7 @@ class UtilityFunctions:
             if ongoing:
                 try:
                     search_results = self.jikan.search('anime', a_title, page=1,
-                                                       parameters={'type': 'tv', 'status': 'airing', 'limit': 5,
+                                                       parameters={'type': 'tv,ona,ova', 'status': 'airing', 'limit': 5,
                                                                    'genre': 15,
                                                                    'genre_exclude': 0})
                 except APIException:
@@ -158,7 +158,7 @@ class UtilityFunctions:
 
 
 class HandlersStructure:
-    def __init__(self, updater, jikan, di):
+    def __init__(self, updater, jikan, di, li):
         """
         Initializes requirements for handlers
 
@@ -166,9 +166,11 @@ class HandlersStructure:
         :param jikan:
         :param di: DataInterface DB connector instance
         :type di: :class:`db_wrapper2.DataInterface`
+        :type li: :class:`list_parser.ListImporter`
         """
         self.updater = updater
         self.di = di
+        self.li = li
         self.jikan = jikan
         self.utilities = UtilityFunctions(jikan, di)
         self.handlers_list = HandlersList(
@@ -188,8 +190,8 @@ class HandlersStructure:
                 {'command': ['future'], 'function': self.show_awaited},
                 {'command': ['random'], 'function': self.random_choice},
                 {'command': ['users'], 'function': self.users_stats},
-                {'message': 'sticker', 'function': self.convert_webp},
-                {'command': ['source'], 'function': self.ask_saucenao},
+                # {'command': ['source'], 'function': self.ask_saucenao},
+                # {'message': 'sticker', 'function': self.convert_webp},
             ],
             [
                 # redirects non-groupchat commands in group chats to an empty handler
@@ -211,6 +213,7 @@ class HandlersStructure:
             [
                 # admin-only commands
                 # 'force_deliver': {'command': ['force_deliver'], 'function': self.force_deliver},
+                {'command': ['update_lists'], 'function': self.update_lists},
                 {'command': ['send_last'], 'function': self.deliver_last},
                 {'command': ['prep_waifu_list'], 'function': self.process_waifus},
             ],
@@ -428,8 +431,7 @@ class HandlersStructure:
                                  disable_web_page_preview=True)
 
     def show_lockouts(self, update, context):
-        lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">'
-                              f'{t[0]}</a> ep {t[1]} (до {t[2] + timedelta(hours=24)})'
+        lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]} (до {t[2] + timedelta(hours=24)})'
                               for t in
                               self.di.select_locked_out_ongoings().all()
                               ])
@@ -452,7 +454,9 @@ class HandlersStructure:
                                      (f' (c {str(aw[3])[:10]})' if aw[3] else '')
                                      for aw in awaited_s])
             studios_list = ', '.join(set([aw[4].strip() for aw in awaited_s]))
-            awaited_a = self.di.select_future_anime_by_title(name).all()
+            awaited_a = list(set(
+                [entry[:4] for entry in self.di.select_future_anime_by_title(name).all()]
+            ))
             animes_str = '\n'.join([f'<a href="https://myanimelist.net/anime/{aw[0]}">{aw[1]}</a> ({aw[2]})' +
                                     (f' (c {str(aw[3])[:10]})' if aw[3] else '')
                                     for aw in awaited_a])
@@ -523,6 +527,14 @@ class HandlersStructure:
                                          parse_mode=ParseMode.HTML)
 
     def process_waifus(self, update, context):
+        def waifu_in_anime(id, block_list):
+            info = self.jikan.character(id)
+            sleep(config.jikan_delay)
+            in_anime = [(item['mal_id'], item['name']) for item in info['animeography']]
+            new_anime = [anime for anime in in_anime if (anime[0] in ongoing_ids)]
+            old_anime = [anime for anime in in_anime if not (anime[0] in ongoing_ids) and (anime[0] in block_list)]
+            return info, new_anime, old_anime
+
         entities = update.effective_message.parse_entities(types='url')
         if not entities:
             return
@@ -532,19 +544,18 @@ class HandlersStructure:
             result = re.match('https://myanimelist\\.net/character/(\d+)/.*', link)
             if result:
                 mal_character_ids.append(result.group(1))
+        mal_character_ids = list(set(mal_character_ids))
         pprint(mal_character_ids)
         ongoing_ids = [item[0] for item in
                        self.di.select_ongoing_ids().all()]
         print(ongoing_ids)
         allowed_entries = defaultdict(list)
         waifu_counter = 0
+        block_list = [item[0] for item in self.di.select_waifu_blocker_shows().all()]
         for id in mal_character_ids:
-            info = self.jikan.character(id)
-            sleep(config.jikan_delay)
-            in_anime = [(item['mal_id'], item['name']) for item in info['animeography']]
-            old_anime = [anime for anime in in_anime if not (anime[0] in ongoing_ids)]
+            info, new_anime, old_anime = waifu_in_anime(id, block_list)
             if not old_anime:
-                allowed_entries[in_anime[0][1]].append((id, info['name']))
+                allowed_entries[new_anime[0][1]].append((id, info['name']))
                 print(f'ALLOWED: {info["name"]}({id})')
                 waifu_counter += 1
             else:
@@ -557,6 +568,7 @@ class HandlersStructure:
                              for char in allowed_entries[anime]])
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                                  disable_web_page_preview=True)
+
 
     # todo check whether torrent file still exists
     # todo make sure old callbacks do not fuck shit up
@@ -640,33 +652,36 @@ class HandlersStructure:
             return
         q = ' '.join(context.args)
         output = self.utilities.get_anime_info(q)
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
+        if not output:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено: "{q}"')
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
                                  parse_mode=ParseMode.HTML)
         sleep(config.jikan_delay)
 
-    @staticmethod
-    def convert_webp(update, context):
-        sticker = update.effective_message.sticker
-        if not sticker.emoji:
-            filename = f"img/{sticker.file_unique_id}.png"
-            if not os.path.exists(filename):
-                wpo = BytesIO()
-                w_write = BufferedWriter(wpo)
-                w_read = BufferedReader(wpo)
-                file = context.bot.get_file(file_id=sticker.file_id)
-                file.download(out=w_write)
-                img = Image.open(w_read).convert("RGBA")
-                bg = Image.new("RGBA", img.size, "WHITE")
-                bg.paste(img, (0, 0), img)
-                bg.convert('RGB').save(filename, "JPEG")
-                img.close()
-                bg.close()
-                wpo.close()
-            converted = open(filename, 'rb')
-            msg = f'WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})'
-            context.bot.send_photo(chat_id=update.effective_chat.id, caption=msg, photo=converted)
-            context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
-            converted.close()
+    # @staticmethod
+    # def convert_webp(update, context):
+        # sticker = update.effective_message.sticker
+        # if not sticker.emoji:
+            # filename = f"img/{sticker.file_unique_id}.jpg"
+            # if not os.path.exists(filename):
+                # wpo = BytesIO()
+                # w_write = BufferedWriter(wpo)
+                # w_read = BufferedReader(wpo)
+                # file = context.bot.get_file(file_id=sticker.file_id)
+                # file.download(out=w_write)
+                # img = Image.open(w_read).convert("RGBA")
+                # bg = Image.new("RGBA", img.size, "WHITE")
+                # bg.paste(img, (0, 0), img)
+                # bg.convert('RGB').save(filename, "JPEG")
+                # img.close()
+                # bg.close()
+                # wpo.close()
+            # converted = open(filename, 'rb')
+            # msg = f'WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})'
+            # context.bot.send_photo(chat_id=update.effective_chat.id, caption=msg, photo=converted)
+            # context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+            # converted.close()
 
     def ask_saucenao(self, update, context):
         photo_file_id = None
@@ -736,7 +751,7 @@ class HandlersStructure:
                 # else:
                 #     context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже зарегистрированы!')
                 #     return
-        if user_id not in self.di.select_user_tg_ids().all():
+        if (user_id,) not in self.di.select_user_tg_ids().all():
             # print(user_id, self.di.select_user_tg_ids().all())
             self.di.insert_new_user(user_name, user_id)
         msg = 'Вы зарегистрированы!\nВыберите предпочитаемое разрешение видео для доставки торрентов (по умолчанию 720р).\n' \
@@ -750,6 +765,9 @@ class HandlersStructure:
         button_list = [InlineKeyboardButton(entry[0], callback_data=f"sr {user_id} {entry[1]}") for entry in res_list]
         reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=1))
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, reply_markup=reply_markup)
+        
+    def update_lists(self, update, context):
+        self.li.update_all()
 
     def inline_query(self, update, context):
         query = update.inline_query.query

@@ -2,7 +2,7 @@ import re
 
 from ORMWrapper import *
 from pprint import pprint
-from sqlalchemy import func, desc, or_, insert, update
+from sqlalchemy import func, desc, or_, and_, insert, update
 from sqlalchemy.orm import aliased
 from datetime import datetime, timedelta
 
@@ -32,8 +32,7 @@ class DataInterface:
 
     @staticmethod
     def select_user_tg_ids():
-        id_list = [_id[0] for _id in session.query(Users).filter(Users.tg_id != None).with_entities(Users.tg_id)]
-        return id_list
+        return session.query(Users).filter(Users.tg_id != None).with_entities(Users.tg_id)
         
     @staticmethod
     def select_ptw_list_by_user_tg_id(user_tg_id):
@@ -137,7 +136,7 @@ class DataInterface:
     def select_locked_out_ongoings():
         threshold = datetime.now() - timedelta(hours=24)
         return session.query(Ongoings).join(Anime, Anime.mal_aid == Ongoings.mal_aid).\
-            filter(Ongoings.last_release >= threshold).\
+            filter(Ongoings.last_release >= threshold, Ongoings.last_ep > 1).\
             with_entities(Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid)
         
     @staticmethod
@@ -281,6 +280,18 @@ class DataInterface:
             filter(ListStatus.user_id == service_user_id).\
             with_entities(ListStatus.user_id)
 
+    @staticmethod
+    def select_genres():
+        return session.query(Genres.mal_gid)
+
+    @staticmethod
+    def select_licensors():
+        return session.query(Licensors.name)
+
+    @staticmethod
+    def select_producers():
+        return session.query(Producers.mal_pid)
+
     # feed_parser SELECT methods
 
     @staticmethod
@@ -296,7 +307,7 @@ class DataInterface:
 
     @staticmethod
     def select_unchecked_feed_entries():
-        return session.query(AniFeeds).filter(AniFeeds.checked == False).order_by(AniFeeds.date)
+        return session.query(AniFeeds).filter(AniFeeds.checked == 0).order_by(AniFeeds.date)
 
     @staticmethod
     def select_ongoing_anime_id_by_synonym(synonym):
@@ -334,6 +345,22 @@ class DataInterface:
     @staticmethod
     def select_titles_pending_for_delivery():
         return session.query(v_pending_delivery)
+
+    @staticmethod
+    def select_waifu_blocker_shows():
+        return session.query(Anime).filter(or_(and_(Anime.show_type == 'ONA', Anime.eps > 3), Anime.show_type == 'TV'))\
+            .with_entities(Anime.mal_aid)
+
+    # synonyms SELECT methods
+    @staticmethod
+    def select_by_synonym_id_pair(mal_aid, synonym):
+        return session.query(AnimeXSynonyms)\
+            .filter(AnimeXSynonyms.mal_aid == mal_aid, AnimeXSynonyms.synonym == synonym)
+
+    @staticmethod
+    def select_all_possible_synonyms():
+        return session.query(Anime). \
+            with_entities(Anime.mal_aid, Anime.title, Anime.title_eng, Anime.title_jap, Anime.title_synonyms)
 
     # handlers INSERT methods
     @staticmethod
@@ -420,9 +447,6 @@ class DataInterface:
             new_genre = Genres(mal_gid=genre['mal_id'], name=genre['name'])
             session.add(new_genre)
         session.commit()
-        # q = insert(Genres)
-        # genres = [{'mal_gid': genre['mal_id'], 'name': genre['name']} for genre in genre_list]
-        # br.edit_data(q, genres)
 
     @staticmethod
     def insert_new_producers(producer_list):
@@ -430,52 +454,40 @@ class DataInterface:
             new_producer = Producers(mal_pid=producer['mal_id'], name=producer['name'])
             session.add(new_producer)
         session.commit()
-        # q = insert(Producers)
-        # producers = [{'mal_pid': producer['mal_id'], 'name': producer['name']} for producer in producer_list]
-        # br.edit_data(q, producers)
 
     @staticmethod
     def insert_new_licensors(licensor_list):
         for licensor in licensor_list:
-            new_licensor = Licensors(name=licensor['name'])
+            new_licensor = Licensors(name=licensor)
             session.add(new_licensor)
         session.commit()
-        # q = insert(Licensors)
-        # licensors = [{'name': licensor['name']} for licensor in licensor_list]
-        # br.edit_data(q, licensors)
 
     @staticmethod
     def insert_new_axg(anime):
         anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        for genre in anime['genres']:
+        new_axg = [genre for genre in anime['genres'] if genre['mal_id'] not in anime_.genres]
+        for genre in new_axg:
             genre_ = session.query(Genres).filter(Genres.mal_gid == genre['mal_id']).first()
             anime_.genres.append(genre_)
         session.commit()
-        # q = insert(t_anime_x_genres)
-        # cross_genres = [{'mal_aid': anime['mal_id'], 'mal_gid': genre['mal_id']} for genre in anime['genres']]
-        # br.edit_data(q, cross_genres)
 
     @staticmethod
     def insert_new_axp(anime):
         anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        for producer in anime['producers']:
+        new_axp = [producer for producer in anime['producers'] if producer['mal_id'] not in anime_.producers]
+        for producer in new_axp:
             producer_ = session.query(Producers).filter(Producers.mal_pid == producer['mal_id']).first()
             anime_.producers.append(producer_)
         session.commit()
-        # q = insert(t_anime_x_producers)
-        # cross_producers = [{'mal_aid': anime['mal_id'], 'mal_pid': producer['mal_id']} for producer in anime['prpducers']]
-        # br.edit_data(q, cross_producers)
 
     @staticmethod
     def insert_new_axl(anime):
         anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        for licensor in anime['licensors']:
-            licensor_ = session.query(Licensors).filter(Licensors.name == licensor['name']).first()
+        new_axl = [licensor for licensor in anime['licensors'] if licensor not in anime_.licensors]
+        for licensor in new_axl:
+            licensor_ = session.query(Licensors).filter(Licensors.name == licensor).first()
             anime_.licensors.append(licensor_)
         session.commit()
-        # q = insert(t_anime_x_licensors)
-        # cross_licensors = [{'mal_aid': anime['mal_id'], 'name': licensor} for licensor in anime['licensors']]
-        # br.edit_data(q, cross_licensors)
 
     @staticmethod
     def insert_new_animelist(mal_uid, anime_list):
@@ -519,6 +531,15 @@ class DataInterface:
                                         file_size=size)
         session.add(torrent_file)
         session.commit()
+
+    # synonyms INSERT methods
+    @staticmethod
+    def insert_new_synonym(mal_aid, synonym):
+        new_synonym = AnimeXSynonyms(mal_aid=mal_aid, synonym=synonym)
+        try:
+            session.add(new_synonym)
+        except Exception:
+            print('INTEGRITY FAILURE')
 
     # INSERT methods end
     # handlers DELETE methods

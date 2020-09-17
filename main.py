@@ -10,8 +10,9 @@ from datetime import datetime
 from core import BotCore
 
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', #filename='log/tgbot.log',
-                    level=logging.DEBUG)
+logging.basicConfig(handlers=[logging.FileHandler(filename='log/tgbot.log', encoding='utf-8')],
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 # telegram.ext initialization
 updater = Updater(token=config.token, use_context=True)
@@ -25,6 +26,8 @@ announce_time = datetime.strptime("14:01 +0300", "%H:%M %z").time()
 job_show_digest = jobs.run_daily(core.jobs.show_daily_events, announce_time)
 list_update_time = datetime.strptime("04:03 +0300", "%H:%M %z").time()
 job_update_lists = jobs.run_daily(core.jobs.update_lists, list_update_time)
+seasons_update_time = datetime.strptime("05:03 +0300", "%H:%M %z").time()
+job_update_seasons = jobs.run_daily(core.jobs.update_seasons, seasons_update_time, days=(5,))
 
 filter_type_dict = {
     'photo': Filters.photo,
@@ -53,7 +56,6 @@ for category in core.handlers.handlers_list:
             dispatcher.add_error_handler(handler['function'])
 
 updater.bot.send_message(chat_id=config.dev_tg_id, text='Waking up...')
-
 
 updater.start_polling()
 updater.idle()
