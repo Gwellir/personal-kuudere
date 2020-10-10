@@ -112,7 +112,9 @@ class UtilityFunctions:
             anime = self.di.select_anime_by_id(mal_info[0][0]).first()
             # todo it kinda seems that I'm retarded...
             output = AnimeEntry(title=anime.title, type=anime.show_type, status=anime.status, episodes=anime.eps,
-                aired={'from': str(anime.started_at), 'to': str(anime.ended_at)}, score=anime.score, image_url=anime.img_url,
+                aired={'from': str(anime.started_at) if anime.started_at else None,
+                       'to': str(anime.ended_at) if anime.ended_at else None},
+                score=anime.score, image_url=anime.img_url,
                 synopsis=anime.synopsis, url=f'https://myanimelist.net/anime/{anime.mal_aid}', airing=None, background=None,
                 broadcast=None, duration=None, ending_themes=None, favorites=None, genres=None, headers=None, jikan_url=None,
                 licensors=None, mal_id=None, members=None, opening_themes=None, popularity=None, premiered=None,
@@ -191,7 +193,7 @@ class HandlersStructure:
                 {'command': ['random'], 'function': self.random_choice},
                 {'command': ['users'], 'function': self.users_stats},
                 # {'command': ['source'], 'function': self.ask_saucenao},
-                # {'message': 'sticker', 'function': self.convert_webp},
+                {'message': 'sticker', 'function': self.convert_webp},
             ],
             [
                 # redirects non-groupchat commands in group chats to an empty handler
@@ -282,16 +284,6 @@ class HandlersStructure:
             msg = 'Случайное аниме из PTW:\n\n'
             msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>'\
                 if answer else 'в PTW не найдено тайтлов'
-        elif params and not params.score:
-            mal_nicks = params.users
-            ptw_list = self.di.select_ptw_lists_by_usernames(mal_nicks).all()
-            answer = None
-            if ptw_list:
-                answer = rand_choice(ptw_list)
-            sep = ', '
-            msg = f'Случайное аниме из PTW пользователя "{sep.join(mal_nicks)}":\n\n'
-            msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>' \
-                if answer else 'в PTW не найдено тайтлов'
         else:
             pprint(params)
             ignored_list = [str(entry) for entry in [1306893]]  # toiro
@@ -303,9 +295,9 @@ class HandlersStructure:
                       'случайная рекомендация из списков PTW пользователей бота.\n\n' \
                       '<code>*типы - TV, Movie, OVA, ONA, Special, Music, Unknown, Other</code>'
             else:
-                if len(params.score) == 1:
+                if params.score and len(params.score) == 1:
                     params.score.append(params.score[0])
-                if params.score[0] not in range(1, 11) or params.score[1] not in range(1, 11):
+                if params.score and (params.score[0] not in range(1, 11) or params.score[1] not in range(1, 11)):
                     msg = 'Оценка должна быть в диапазоне от 1 до 10'
                 else:
                     registered_users = [entry[0].lower() for entry in self.di.select_registered_user_nicks().all()]
@@ -317,26 +309,44 @@ class HandlersStructure:
                         types_lower = [type_.lower() for type_ in params.type]
                     else:
                         types_lower = ['tv', 'ova', 'movie', 'ona', 'special', 'unknown', 'music', 'other']
-                    list_by_score = self.di.select_watched_titles_in_score_interval(params.score[0], params.score[1],
-                                                                                      ignored_list).all()
                     your_list = [entry[0] for entry in
                                  self.di.select_watched_list_by_user_tg_id(update.effective_user.id).all()]
-                    recommended_list = [entry for entry in list_by_score
-                                        if entry[2].lower() in legit_users
-                                        and entry[3].lower() in types_lower
-                                        and entry[1] not in your_list]
-                    print(len(recommended_list), 'items remaining')
-                    answer = None
-                    if recommended_list:
-                        answer = rand_choice(recommended_list)
-                    sep = ', '
-                    msg = f'<b>Случайное аниме из сохранённых списков</b>:\n'
-                    msg += f'<b>пользователи</b>: {sep.join(legit_users)}\n' if params.users else ''
-                    msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
-                    msg += f'<b>оценка</b>: [{params.score[0]}-{params.score[1]}]\n\n' if params.score[0] != params.score[1]\
-                        else f'<b>оценка</b>: [{params.score[0]}]\n\n'
-                    msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}'\
-                        if answer else 'в списках не найдено подходящих тайтлов'
+                    if not params.score:
+                        mal_nicks = params.users
+                        ptw_list = self.di.select_ptw_lists_by_usernames(mal_nicks).all()
+                        recommended_list = [entry for entry in ptw_list
+                                            if entry[2].lower() in legit_users
+                                            and entry[3].lower() in types_lower
+                                            and entry[1] not in your_list]
+                        answer = None
+                        if recommended_list:
+                            answer = rand_choice(recommended_list)
+                        sep = ', '
+                        msg = f'<b>Случайное аниме из PTW</b>:\n'
+                        msg += f'<b>пользователи</b>: {sep.join(mal_nicks)}\n' if params.users else ''
+                        msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
+                        msg += f'\n<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}' \
+                            if answer else '\nв PTW не найдено тайтлов'
+                    else:
+                        list_by_score = self.di.select_watched_titles_in_score_interval(params.score[0],
+                                                                                        params.score[1],
+                                                                                        ignored_list).all()
+                        recommended_list = [entry for entry in list_by_score
+                                            if entry[2].lower() in legit_users
+                                            and entry[3].lower() in types_lower
+                                            and entry[1] not in your_list]
+                        print(len(recommended_list), 'items remaining')
+                        answer = None
+                        if recommended_list:
+                            answer = rand_choice(recommended_list)
+                        sep = ', '
+                        msg = f'<b>Случайное аниме из сохранённых списков</b>:\n'
+                        msg += f'<b>пользователи</b>: {sep.join(legit_users)}\n' if params.users else ''
+                        msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
+                        msg += f'<b>оценка</b>: [{params.score[0]}-{params.score[1]}]\n\n' if params.score[0] != params.score[1]\
+                            else f'<b>оценка</b>: [{params.score[0]}]\n\n'
+                        msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}'\
+                            if answer else 'в списках не найдено подходящих тайтлов'
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
 
     def quotes(self, update, context):
@@ -659,29 +669,29 @@ class HandlersStructure:
                                  parse_mode=ParseMode.HTML)
         sleep(config.jikan_delay)
 
-    # @staticmethod
-    # def convert_webp(update, context):
-        # sticker = update.effective_message.sticker
-        # if not sticker.emoji:
-            # filename = f"img/{sticker.file_unique_id}.jpg"
-            # if not os.path.exists(filename):
-                # wpo = BytesIO()
-                # w_write = BufferedWriter(wpo)
-                # w_read = BufferedReader(wpo)
-                # file = context.bot.get_file(file_id=sticker.file_id)
-                # file.download(out=w_write)
-                # img = Image.open(w_read).convert("RGBA")
-                # bg = Image.new("RGBA", img.size, "WHITE")
-                # bg.paste(img, (0, 0), img)
-                # bg.convert('RGB').save(filename, "JPEG")
-                # img.close()
-                # bg.close()
-                # wpo.close()
-            # converted = open(filename, 'rb')
-            # msg = f'WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})'
-            # context.bot.send_photo(chat_id=update.effective_chat.id, caption=msg, photo=converted)
-            # context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
-            # converted.close()
+    @staticmethod
+    def convert_webp(update, context):
+        sticker = update.effective_message.sticker
+        if not sticker.emoji:
+            filename = f"img/{sticker.file_unique_id}.jpg"
+            if not os.path.exists(filename):
+                wpo = BytesIO()
+                w_write = BufferedWriter(wpo)
+                w_read = BufferedReader(wpo)
+                file = context.bot.get_file(file_id=sticker.file_id)
+                file.download(out=w_write)
+                img = Image.open(w_read).convert("RGBA")
+                bg = Image.new("RGBA", img.size, "WHITE")
+                bg.paste(img, (0, 0), img)
+                bg.convert('RGB').save(filename, "JPEG")
+                img.close()
+                bg.close()
+                wpo.close()
+            converted = open(filename, 'rb')
+            msg = f'WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})'
+            context.bot.send_photo(chat_id=update.effective_chat.id, caption=msg, photo=converted)
+            context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+            converted.close()
 
     def ask_saucenao(self, update, context):
         photo_file_id = None
