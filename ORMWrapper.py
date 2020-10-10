@@ -21,7 +21,7 @@ class Anime(Base):
     title_jap = Column(String(255))
     synopsis = Column(Text)
     show_type = Column(ENUM('TV', 'Movie', 'OVA', 'Special', 'ONA', 'Music', 'Other', 'Unknown'))
-    started_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    started_at = Column(DateTime)
     ended_at = Column(DateTime)
     eps = Column(SMALLINT(5))
     img_url = Column(String(100))
