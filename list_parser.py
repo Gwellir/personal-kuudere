@@ -106,12 +106,9 @@ class ListImporter:
         if later:
             sa = self.jikan.season_later()
         elif shift != 0:
-            season = MONTH_TO_SEASON_DICT[(datetime.now().month + 12 + shift * 3) % 12]
-            year = datetime.now().year
-            if SEASON_DICT[season] + shift < 0:
-                year -= 1
-            elif SEASON_DICT[season] + shift > 3:
-                year += 1
+            shifted_month = datetime.now().month + shift * 3
+            season = MONTH_TO_SEASON_DICT[(12 + shifted_month % 12) % 12]
+            year = datetime.now().year + (shifted_month - 1) // 12
             sa = self.jikan.season(year=year, season=season)
         elif not y and not s:
             sa = self.jikan.season(year=datetime.now().year,
@@ -289,21 +286,21 @@ class ListImporter:
             self.di.insert_new_animelist(user_id, alist)
 
     def update_seasonal(self):
-        # curr_season = self.get_anime_season_mal()
-        # sleep(config.jikan_delay)
-        # self.base_update(curr_season)
-        # prev_season = self.get_anime_season_mal(shift=-1)
-        # sleep(config.jikan_delay)
-        # self.base_update(prev_season)
+        curr_season = self.get_anime_season_mal()
+        sleep(config.jikan_delay)
+        self.base_update(curr_season)
+        prev_season = self.get_anime_season_mal(shift=-1)
+        sleep(config.jikan_delay)
+        self.base_update(prev_season)
         next_season = self.get_anime_season_mal(shift=1)
         sleep(config.jikan_delay)
         self.base_update(next_season)
-        next_2_season = self.get_anime_season_mal(shift=2)
-        sleep(config.jikan_delay)
-        self.base_update(next_2_season)
+        # next_2_season = self.get_anime_season_mal(shift=2)
+        # sleep(config.jikan_delay)
+        # self.base_update(next_2_season)
 
-        # later_season = self.get_anime_season_mal(later=True)
-        # self.base_update(later_season)
+        later_season = self.get_anime_season_mal(later=True)
+        self.base_update(later_season)
 
 
     def has_changed(self, anime):
