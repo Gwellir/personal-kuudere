@@ -44,7 +44,7 @@ class DataInterface:
     def select_ptw_lists_by_usernames(nick_list):
         return session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id). \
             filter(Users.mal_nick.in_(nick_list)).filter(ListStatus.status == 6, ListStatus.airing != 3). \
-            with_entities(ListStatus.title, ListStatus.mal_aid)
+            with_entities(ListStatus.title, ListStatus.mal_aid, Users.mal_nick, ListStatus.show_type)
         
     @staticmethod
     def select_registered_user_nicks():
@@ -72,7 +72,7 @@ class DataInterface:
         
     @staticmethod
     def select_quotes_like_keyword(keyword):
-        return session.query(Quotes).filter(Quotes.keyword.like(keyword)).\
+        return session.query(Quotes).filter(Quotes.keyword.like(f'%{keyword}%')).\
             with_entities(Quotes.keyword)
         
     @staticmethod
@@ -538,6 +538,7 @@ class DataInterface:
         new_synonym = AnimeXSynonyms(mal_aid=mal_aid, synonym=synonym)
         try:
             session.add(new_synonym)
+            session.commit()
         except Exception:
             print('INTEGRITY FAILURE')
 
