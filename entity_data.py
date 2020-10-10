@@ -44,6 +44,7 @@ class AnimeEntry(namedtuple('AnimeEntry',
     def __str__(self):
         return anime_template % (self.title, self.type, self.status, self.episodes if self.episodes else 'n/a',
                                  self.aired['from'][:10] if self.aired['from'] else '...',
-                                 self.aired['to'][:10] if self.aired['to'] else '...', self.score, self.image_url,
+                                 self.aired['to'][:10] if self.aired['to'] else '...',
+                                 self.score if self.score else '-', self.image_url,
                                  (self.synopsis[:500] + (' &lt;...&gt;' if len(self.synopsis) > 500 else ''))
                                  if self.synopsis else '[No synopsis available.]', self.url,)
