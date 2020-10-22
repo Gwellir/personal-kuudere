@@ -10,6 +10,7 @@ class Synonyms:
 
     def __init__(self, data_interface, autistic=False):
         """Takes data interface class or creates an instance when used as a standalone module.
+        Updates synonym table from an updated anime table.
 
         :param di: DataInterface DB connector instance
         :type di: :class:`db_wrapper2.DataInterface`
@@ -18,15 +19,15 @@ class Synonyms:
             self.di = DataInterface()
         else:
             self.di = data_interface
+        old_synonyms = self.di.select_existing_synonyms()
+        self.pairs |= set(old_synonyms)
 
     def add_to_synonyms(self, mal_aid, synonym):
         if synonym is None:
             return
         if (mal_aid, synonym) not in self.pairs:
             self.pairs.add((mal_aid, synonym))
-            check = self.di.select_by_synonym_id_pair(mal_aid, synonym).first()
-            if not check:
-                self.di.insert_new_synonym(mal_aid, synonym)
+            self.di.insert_new_synonym(mal_aid, synonym)
 
     def extract_synonyms(self):
         synlist = self.di.select_all_possible_synonyms().all()
