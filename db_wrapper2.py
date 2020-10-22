@@ -252,18 +252,23 @@ class DataInterface:
 
     @staticmethod
     # todo tbh this requires a specific instrument like elastic
-    def select_anime_info_by_ordered_token_regex(query):
-        r_string = '.*' + '.*'.join(re.sub(r'\W+', ' ', query).split(' ')) + '.*'
+    def select_anime_info_by_split_words(query):
+        q_string = '%' + '%'.join(re.sub(r'\W+', ' ', query).split(' ')) + '%'
         # mal_info = self.ani_db.select('distinct axs.mal_aid, a.title, a.status, a.show_type, a.eps, a.popularity',
         #                               'anime_x_synonyms axs join anime a on a.mal_aid = axs.mal_aid',
         #                               'axs.synonym rlike %s and a.popularity is not NULL',
         #                               [r_string])
         mal_info = session.query(AnimeXSynonyms).join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid).\
-            filter(AnimeXSynonyms.synonym.op('regexp')(r_string), Anime.popularity != None).\
+            filter(AnimeXSynonyms.synonym.like(q_string), Anime.popularity != None).\
             with_entities(AnimeXSynonyms.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.popularity).\
             distinct().all()
 
         return mal_info
+
+    @staticmethod
+    def select_relations_data():
+        return session.query(Anime) \
+            .with_entities(Anime.mal_aid, Anime.related, Anime.title, )
 
     # handlers SELECT methods end
     # list_parser SELECT methods
@@ -315,11 +320,14 @@ class DataInterface:
             filter(AnimeXSynonyms.synonym == synonym, Anime.status != 'Finished Airing').\
             with_entities(AnimeXSynonyms.mal_aid)
 
-    # todo fix ListStatus dependancy
     @staticmethod
     def select_mal_anime_ids_by_title_part(title):
         return session.query(Ongoings).join(Anime).\
-            filter(Anime.show_type.in_(TYPE_LIST), Anime.status != 'Finished Airing').\
+            filter(
+                Anime.show_type.in_(TYPE_LIST),
+                Anime.status != 'Finished Airing',
+                Anime.started_at < datetime.now() + timedelta(hours=24),
+            ).\
             filter(Anime.title.like(f'%{title}%')).\
             with_entities(Ongoings.mal_aid).\
             distinct()
@@ -356,6 +364,10 @@ class DataInterface:
     def select_by_synonym_id_pair(mal_aid, synonym):
         return session.query(AnimeXSynonyms)\
             .filter(AnimeXSynonyms.mal_aid == mal_aid, AnimeXSynonyms.synonym == synonym)
+
+    @staticmethod
+    def select_existing_synonyms():
+        return session.query(AnimeXSynonyms)
 
     @staticmethod
     def select_all_possible_synonyms():
@@ -519,11 +531,11 @@ class DataInterface:
         session.add(feed_entry)
         session.commit()
 
-    @staticmethod
-    def insert_new_synonyms(mal_aid, a_title):
-        synonym = AnimeXSynonyms(synonym=a_title, mal_aid=mal_aid)
-        session.add(synonym)
-        session.commit()
+    # @staticmethod
+    # def insert_new_synonyms(mal_aid, a_title):
+    #     synonym = AnimeXSynonyms(synonym=a_title, mal_aid=mal_aid)
+    #     session.add(synonym)
+    #     session.commit()
 
     @staticmethod
     def insert_new_torrent_file(mal_aid, group, episode, filename, res, size):
@@ -541,6 +553,7 @@ class DataInterface:
             session.commit()
         except Exception:
             print('INTEGRITY FAILURE')
+            session.rollback()
 
     # INSERT methods end
     # handlers DELETE methods
@@ -567,7 +580,7 @@ class DataInterface:
     # handlers UPDATE methods
     @staticmethod
     def update_quote_by_keyword(keyword, content):
-        quote = session.query(Quotes).filter(keyword == keyword).first()
+        quote = session.query(Quotes).filter(Quotes.keyword == keyword).first()
         quote.content = content
         session.commit()
         # q = update(Quotes).values(content=content, ). \
@@ -607,8 +620,9 @@ class DataInterface:
         status = session.query(UsersXTracked).\
             filter(UsersXTracked.user_id == user_id, UsersXTracked.mal_aid == mal_aid,
                   UsersXTracked.a_group == a_group, UsersXTracked.last_ep < episode).first()
-        status.last_ep = episode
-        session.commit()
+        if status:
+            status.last_ep = episode
+            session.commit()
         # br.edit_data(q)
 
     # Feed parser update methods
