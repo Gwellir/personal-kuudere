@@ -68,6 +68,8 @@ class UtilityFunctions:
         """
         self.jikan = jikan
         self.di = di
+        self.relations = {}
+        self.build_rel_structure()
 
     # todo subscription (or delivery) for anime which is unavailable in users' preferred res
     def torrent_subscribe(self, uid, aid):
@@ -121,6 +123,13 @@ class UtilityFunctions:
                 producers=None, rank=None, rating=None, related=None, request_cache_expiry=None, request_cached=None,
                 request_hash=None, scored_by=None, source=None, studios=None, title_english=None, title_japanese=None,
                 title_synonyms=None, trailer_url=None)
+            if 'chain' in self.relations[anime.mal_aid]:
+                franchise = [f'<a href="https://myanimelist.net/anime/{anime_id}">{self.relations[anime_id]["title"]}</a>'
+                             if anime_id != anime.mal_aid else f'<b>{self.relations[anime_id]["title"]}</b>'
+                            for anime_id in self.relations[anime.mal_aid]['chain']]
+                extension = ' ->\n'.join(franchise)
+                print(extension)
+                output = f'{str(output)}\n<b>Timeline:</b>\n{extension}'
         else:
             output = None
         return output
@@ -131,7 +140,7 @@ class UtilityFunctions:
         if not mal_info:
             mal_info = self.di.select_anime_info_by_synonym_part(a_title)
         if not mal_info:
-            mal_info = self.di.select_anime_info_by_ordered_token_regex(a_title)
+            mal_info = self.di.select_anime_info_by_split_words(a_title)
         if not mal_info:
             print(f'Looking up "{a_title}" on MAL...')
             if ongoing:
@@ -157,6 +166,48 @@ class UtilityFunctions:
         if ongoing:
             mal_info = list(filter(lambda entry: entry[2] is True, mal_info))
         return mal_info
+
+    def build_rel_structure(self):
+        starts = []
+        for entry in self.di.select_relations_data().all():
+            # pprint(entry)
+            self.relations[entry[0]] = {}
+            self.relations[entry[0]]['title'] = entry[2]
+            for key in entry[1]:
+                self.relations[entry[0]][key] = entry[1][key]
+                if key == 'Sequel' and ('Prequel' not in entry[1])\
+                        and len(entry[1][key]) > 0:
+                    starts.append([entry[0]])
+        print(len(self.relations))
+        pprint(starts)
+        for chain in starts:
+            print(f'initiating chain {chain[0]}', end=', ')
+            try:
+                next_id = int(self.relations[chain[0]]['Sequel'][0]['mal_id'])
+                chain.append(next_id)
+                print(next_id, end=', ')
+            except KeyError as e:
+                print('ERROR:', e.args)
+            i = 1
+            try:
+                while 'Sequel' in self.relations[chain[i]]:
+                    for seq in self.relations[chain[i]]['Sequel']:
+                        if int(seq['mal_id']) in chain:
+                            continue
+                        else:
+                            new_id = int(seq['mal_id'])
+                            break
+                    chain.append(new_id)
+                    print(new_id, end=', ')
+                    i += 1
+            except KeyError as e:
+                print('ERROR:', e.args)
+            print()
+        for chain in starts:
+            for anime_id in chain:
+                if anime_id not in self.relations:
+                    self.relations[anime_id] = {}
+                self.relations[anime_id]['chain'] = chain
 
 
 class HandlersStructure:
@@ -578,7 +629,6 @@ class HandlersStructure:
                              for char in allowed_entries[anime]])
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                                  disable_web_page_preview=True)
-
 
     # todo check whether torrent file still exists
     # todo make sure old callbacks do not fuck shit up
