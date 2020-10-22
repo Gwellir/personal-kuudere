@@ -11,6 +11,8 @@ from jikanpy import APIException
 from pytz import timezone
 from datetime import datetime, timedelta
 
+from config import jikan_delay
+
 
 CATCH_360 = ['360p']
 CATCH_480 = ['480p', '720x480']
@@ -119,7 +121,7 @@ def parse_feed_title(a_title):
         if ep_number.group('season'):
             a_title += ep_number.group('season')
         a_title = match_multiple_spaces.sub(' ', a_title.strip())
-    return a_ep_no, a_group[:90], a_title, a_res, a_ext  # fix for group names which are too long
+    return a_ep_no, a_group[:90] if a_group else None, a_title, a_res, a_ext  # fix for group names which are too long
 
 
 def get_local_time(dtime):
@@ -237,7 +239,7 @@ class TorrentFeedParser:
                 if not mal_ids:
                     search_results = None
                     try:
-                        search_results = self.jikan.search('anime', a_title, page=2,
+                        search_results = self.jikan.search('anime', a_title, page=1,
                                                            parameters={'type': 'tv', 'status': 'airing', 'limit': 5,
                                                                        'genre': 15,
                                                                        'genre_exclude': 0})
@@ -246,7 +248,7 @@ class TorrentFeedParser:
                                    if (result['episodes'] == 0 or result['episodes'] >= int(a_ep_no))]
                     except APIException:
                         pass
-                    sleep(4)
+                    sleep(jikan_delay)
                 if len(mal_ids) == 1:
                     print(mal_ids[0])
                     mal_id = mal_ids[0]
@@ -258,10 +260,11 @@ class TorrentFeedParser:
                 if mal_id:
                     if not self.di.select_anime_id_is_in_database(mal_id).first():
                         a_info = self.jikan.anime(mal_id)
-                        sleep(2)
+                        sleep(jikan_delay)
                         # is sometimes unreachable
                         self.di.upsert_anime_entry(a_info)
-                    self.di.insert_new_synonyms(mal_id, a_title)
+                    # todo sometimes a double can make it here despite synonym check
+                    self.di.insert_new_synonym(mal_id, a_title)
             else:
                 pass
             self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title, a_date)
