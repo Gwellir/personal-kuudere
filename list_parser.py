@@ -67,20 +67,6 @@ MONTH_TO_SEASON_DICT = {
     12: 'fall',
 }
 
-SEASON_LIST = [
-    'winter',
-    'spring',
-    'summer',
-    'fall',
-]
-
-SEASON_DICT = {
-    'winter': 0,
-    'spring': 1,
-    'summer': 2,
-    'fall': 3,
-}
-
 
 class ListImporter:
     def __init__(self, jikan, di, autistic=False):
@@ -302,7 +288,6 @@ class ListImporter:
         later_season = self.get_anime_season_mal(later=True)
         self.base_update(later_season)
 
-
     def has_changed(self, anime):
         stored_entry = self.di.select_anime_by_id(anime['mal_id']).first()
         # pprint(stored_entry)
@@ -318,7 +303,8 @@ class ListImporter:
                     and (not stored_entry.started_at or anime['airing_start'][:10] != str(stored_entry.started_at)[:10]))\
                 or anime['episodes'] != stored_entry.eps\
                 or anime['score'] != stored_entry.score\
-                or stored_entry.status == 'Currently Airing':
+                or stored_entry.status == 'Currently Airing'\
+                or stored_entry.status == 'Not yet aired':
             return True
         else:
             return False
@@ -373,7 +359,7 @@ class ListImporter:
 
 if __name__ == '__main__':
     li = ListImporter(None, None, autistic=True)
-    # li.update_mal_list_status('')
+    # li.update_mal_list_status('droidy')
     # li.update_all()
     # li.get_anime_season_mal()
     li.update_seasonal()
