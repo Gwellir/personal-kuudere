@@ -1,9 +1,8 @@
 import re
 
-from ORMWrapper import *
+from orm.ORMWrapper import *
 from pprint import pprint
-from sqlalchemy import func, desc, or_, and_, insert, update
-from sqlalchemy.orm import aliased
+from sqlalchemy import func, desc, or_, and_
 from datetime import datetime, timedelta
 
 
@@ -100,6 +99,7 @@ class DataInterface:
         list_union = self.select_titles_tracked_by_bot().union(self.select_titles_tracked_in_lists()).subquery()
         return session.query(list_union).\
             join(Anime, Anime.mal_aid == list_union.c.mal_aid).\
+            filter(Anime.status == 'Currently Airing').\
             group_by(Anime.mal_aid).\
             order_by(desc(func.count(list_union.c.mal_aid))).\
             with_entities(Anime.title, list_union.c.mal_aid, func.count(list_union.c.mal_aid))
@@ -172,7 +172,7 @@ class DataInterface:
         return session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id).\
             filter(ListStatus.mal_aid == mal_aid).\
             order_by(desc(ListStatus.score)).\
-            with_entities(Users.mal_nick, ListStatus.score, ListStatus.status, ListStatus.watched)
+            with_entities(Users.tg_nick, ListStatus.score, ListStatus.status, ListStatus.watched)
         
     @staticmethod
     def select_user_id_by_tg_id(tg_id):
@@ -270,7 +270,7 @@ class DataInterface:
         return session.query(Anime) \
             .with_entities(Anime.mal_aid, Anime.related, Anime.title, )
 
-    # handlers SELECT methods end
+    # handler_modules SELECT methods end
     # list_parser SELECT methods
 
     @staticmethod
@@ -344,6 +344,11 @@ class DataInterface:
             filter(TorrentFiles.mal_aid == mal_aid, TorrentFiles.a_group == group, TorrentFiles.episode == episode,
                    TorrentFiles.res == res, TorrentFiles.file_size == size)
 
+    @staticmethod
+    def select_last_ongoing_ep_by_id(mal_aid):
+        return session.query(Ongoings).filter(Ongoings.mal_aid == mal_aid).\
+            with_entities(Ongoings.last_ep)
+
     # jobs SELECT methods
 
     @staticmethod
@@ -374,7 +379,7 @@ class DataInterface:
         return session.query(Anime). \
             with_entities(Anime.mal_aid, Anime.title, Anime.title_eng, Anime.title_jap, Anime.title_synonyms)
 
-    # handlers INSERT methods
+    # handler_modules INSERT methods
     @staticmethod
     def insert_new_tracked_title(user_id, mal_aid, last_ep, a_group):
         new_tracked = UsersXTracked(user_id=user_id, mal_aid=mal_aid, last_ep=last_ep, a_group=a_group)
@@ -556,7 +561,7 @@ class DataInterface:
             session.rollback()
 
     # INSERT methods end
-    # handlers DELETE methods
+    # handler_modules DELETE methods
     @staticmethod
     def delete_tracked_anime(user_id, mal_aid):
         session.query(UsersXTracked).\
@@ -570,14 +575,15 @@ class DataInterface:
             filter(Quotes.keyword == keyword).\
             delete()
 
-    # ListStatus DELETE handlers
+    # ListStatus DELETE handler_modules
     @staticmethod
     def delete_list_by_user_id(user_id):
         session.query(ListStatus).\
             filter(ListStatus.user_id == user_id).\
             delete()
+        session.commit()
 
-    # handlers UPDATE methods
+    # handler_modules UPDATE methods
     @staticmethod
     def update_quote_by_keyword(keyword, content):
         quote = session.query(Quotes).filter(Quotes.keyword == keyword).first()
@@ -614,7 +620,7 @@ class DataInterface:
         # q = update(Users).values(preferred_res=res).where(Users.tg_id == tg_id)
         # br.edit_data(q)
 
-    #todo think about additional checking for correct episode numbers
+    # todo think about additional checking for correct episode numbers
     @staticmethod
     def update_release_status_for_user_after_delivery(episode, user_id, mal_aid, a_group):
         status = session.query(UsersXTracked).\
