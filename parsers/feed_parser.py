@@ -249,10 +249,10 @@ class TorrentFeedParser:
                     except APIException:
                         pass
                     sleep(jikan_delay)
-                if len(mal_ids) == 1:
-                    print(mal_ids[0])
-                    mal_id = mal_ids[0]
-                else:
+                # if len(mal_ids) == 1:
+                #     print(mal_ids[0])
+                #     mal_id = mal_ids[0]
+                # else:
                     print(f"Can't get a precise result... {mal_ids}")
                     if search_results:
                         mal_id = title_compare(search_results['results'], a_title)
@@ -289,6 +289,10 @@ class TorrentFeedParser:
         :param size:
         :returns: Name of local torrent file
         """
+        approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id).one()
+        if approved_ep and int(episode) > approved_ep[0]:
+            print(f'  >>> FAKE {title} - {episode} by {group}')
+            return
         is_downloaded = False
         title = re.sub(r'[|/\\?:<>]', ' ', title)
         url = link
