@@ -24,7 +24,7 @@ from time import sleep
 from pprint import pprint
 from datetime import datetime, timedelta
 import argparse
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from io import BufferedWriter, BytesIO, BufferedReader
 
 
@@ -73,11 +73,11 @@ class UtilityFunctions:
 
     # todo subscription (or delivery) for anime which is unavailable in users' preferred res
     def torrent_subscribe(self, uid, aid):
-        PRIORITY_GROUPS = ['HorribleSubs', 'Erai-raws']
+        PRIORITY_GROUPS = ['SubsPlease', 'Erai-raws']
         group_list = [entry[0] for entry in self.di.select_group_list_for_user(aid, uid).all()]
         pprint(group_list)
         if not group_list:
-            self.di.insert_new_tracked_title(uid, aid, 0, 'HorribleSubs')
+            self.di.insert_new_tracked_title(uid, aid, 0, 'SubsPlease')
             return False
         for group in PRIORITY_GROUPS:
             if group in group_list:
@@ -96,14 +96,17 @@ class UtilityFunctions:
     def store_anime(self, a_entry):
         self.di.upsert_anime_entry(a_entry)
 
-    # todo obsolete used by anime_walker (scrapper)
     def get_anime_by_aid(self, mal_aid):
         local_result = self.di.select_anime_by_id(mal_aid).first()
         if not local_result or not local_result.popularity:
-            anime = self.jikan.anime(mal_aid)
+            try:
+                anime = self.jikan.anime(mal_aid)
+                output = AnimeEntry(**anime)
+                self.store_anime(output)
+            except APIException as e:
+                print(e.args)
+                output = None
             sleep(config.jikan_delay)
-            output = AnimeEntry(**anime)
-            self.store_anime(output)
         else:
             output = local_result
         return output
@@ -126,16 +129,19 @@ class UtilityFunctions:
             if 'chain' in self.relations[anime.mal_aid]:
                 franchise = [f'<a href="https://myanimelist.net/anime/{anime_id}">{self.relations[anime_id]["title"]}</a>'
                              if anime_id != anime.mal_aid else f'<b>{self.relations[anime_id]["title"]}</b>'
-                            for anime_id in self.relations[anime.mal_aid]['chain']]
+                             for anime_id in self.relations[anime.mal_aid]['chain']]
                 extension = ' ->\n'.join(franchise)
-                print(extension)
+                # print(extension)
                 output = f'{str(output)}\n<b>Timeline:</b>\n{extension}'
         else:
             output = None
         return output
 
     # todo add streamlined search in cached base
-    def lookup_anime_info_by_title(self, a_title, ongoing=False):
+    def lookup_anime_info_by_title(self, a_title: str, ongoing=False):
+        """Searches the DB for titles matching query,
+        order: exact match > substring > split words in the same order > MAL api search"""
+
         mal_info = self.di.select_anime_info_by_exact_synonym(a_title)
         if not mal_info:
             mal_info = self.di.select_anime_info_by_synonym_part(a_title)
@@ -162,12 +168,17 @@ class UtilityFunctions:
             mal_info = [(result['mal_id'], result['title'], result['airing'], result['type'], result['members'])
                         for result in search_results['results']]
         else:
-            mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
+            # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
+            mal_info = sorted(mal_info, key=lambda item: len(item[1]))
         if ongoing:
-            mal_info = list(filter(lambda entry: entry[2] is True, mal_info))
+            mal_info = [entry for entry in mal_info if entry[2] is True]
         return mal_info
 
     def build_rel_structure(self):
+        """Creates the longest prequel-sequel streaks for all known anime titles.
+
+        Uses Relations JSON data from the DB."""
+
         starts = []
         for entry in self.di.select_relations_data().all():
             # pprint(entry)
@@ -178,14 +189,10 @@ class UtilityFunctions:
                 if key == 'Sequel' and ('Prequel' not in entry[1])\
                         and len(entry[1][key]) > 0:
                     starts.append([entry[0]])
-        print(len(self.relations))
-        pprint(starts)
         for chain in starts:
-            print(f'initiating chain {chain[0]}', end=', ')
             try:
                 next_id = int(self.relations[chain[0]]['Sequel'][0]['mal_id'])
                 chain.append(next_id)
-                print(next_id, end=', ')
             except KeyError as e:
                 print('ERROR:', e.args)
             i = 1
@@ -198,15 +205,17 @@ class UtilityFunctions:
                             new_id = int(seq['mal_id'])
                             break
                     chain.append(new_id)
-                    print(new_id, end=', ')
                     i += 1
             except KeyError as e:
                 print('ERROR:', e.args)
-            print()
         for chain in starts:
             for anime_id in chain:
                 if anime_id not in self.relations:
-                    self.relations[anime_id] = {}
+                    self.get_anime_by_aid(anime_id)
+                    sleep(config.jikan_delay)
+                    self.relations[anime_id] = {'title': 'Unknown'}
+                if 'chain' in self.relations[anime_id] and len(self.relations[anime_id]['chain']) > len(chain):
+                    continue
                 self.relations[anime_id]['chain'] = chain
 
 
@@ -501,7 +510,6 @@ class HandlersStructure:
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
                                  disable_web_page_preview=True)
 
-    # todo split into MVC model
     def show_awaited(self, update, context):
         q = context.args
         if q:
@@ -549,7 +557,8 @@ class HandlersStructure:
             return
         list_prefixes = {
             'MAL': 'https://myanimelist.net/animelist/%s',
-            'Anilist': 'https://anilist.co/user/%s/animelist'
+            'Anilist': 'https://anilist.co/user/%s/animelist',
+            'Other': 'User info is loaded separately.'
         }
         list_link = list_prefixes[user_list[1]] % user_list[0]
         context.bot.send_message(chat_id=update.effective_chat.id,
@@ -580,7 +589,8 @@ class HandlersStructure:
                 watched = '\n'.join([f'{item[0]} - {"n/a" if item[1] == 0 else item[1]} '
                                      f'({status_dict[item[2]] + (f": {item[3]}" if item[2] != 2 else "")})'
                                      for item in select_seen if item[2] != 6])
-                ptw = '\n'.join([f'{item[0]} ({status_dict[item[2]]})' for item in select_seen if item[2] == 6])
+                ptw = '\n'.join([f'{item[0]} ({status_dict[item[2]] + (f": {item[3]}" if item[3] != 0 else "")})'
+                                 for item in select_seen if item[2] == 6])
                 msg += f'Оценки для тайтла:\n<b>{title[0]}</b>\n\n' + watched + ('\n\n' + ptw if ptw else '')
                 context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
             else:
@@ -730,7 +740,12 @@ class HandlersStructure:
                 w_read = BufferedReader(wpo)
                 file = context.bot.get_file(file_id=sticker.file_id)
                 file.download(out=w_write)
-                img = Image.open(w_read).convert("RGBA")
+                try:
+                    img = Image.open(w_read).convert("RGBA")
+                except UnidentifiedImageError as e:
+                    print(e.args)
+                    wpo.close()
+                    return 
                 bg = Image.new("RGBA", img.size, "WHITE")
                 bg.paste(img, (0, 0), img)
                 bg.convert('RGB').save(filename, "JPEG")
