@@ -1,8 +1,4 @@
-from MySQLdb._exceptions import IntegrityError
-
-from db_wrapper2 import DataInterface
-from ORMWrapper import *
-from sqlalchemy import insert
+from utils.db_wrapper2 import DataInterface
 
 
 class Synonyms:

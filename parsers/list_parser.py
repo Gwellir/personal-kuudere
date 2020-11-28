@@ -10,7 +10,7 @@ import config
 import requests
 from datetime import datetime
 
-from db_wrapper2 import DataInterface
+from utils.db_wrapper2 import DataInterface
 from entity_data import AnimeEntry
 
 PAGE_SIZE = 300

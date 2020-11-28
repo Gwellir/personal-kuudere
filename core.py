@@ -1,11 +1,11 @@
 from jikanpy import Jikan
 
-from db_wrapper2 import DataInterface
+from utils.db_wrapper2 import DataInterface
 from handlers import HandlersStructure
 from jobs import BotJobs
-from feed_parser import TorrentFeedParser
-from list_parser import ListImporter
-from anime_synonyms import Synonyms
+from parsers.feed_parser import TorrentFeedParser
+from parsers.list_parser import ListImporter
+from utils.anime_synonyms import Synonyms
 
 
 class BotCore:
