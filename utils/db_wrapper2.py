@@ -107,6 +107,13 @@ class DataInterface:
     @staticmethod
     def select_ongoing_ids():
         return session.query(Ongoings).with_entities(Ongoings.mal_aid)
+
+    @staticmethod
+    def select_fresh_movie_ids():
+        return session.query(Anime).\
+            filter(Anime.show_type == 'Movie',
+                   Anime.started_at >= datetime.now() - timedelta(days=720)).\
+            with_entities(Anime.mal_aid)
         
     # @staticmethod
     # def select_registered_tg_users_count(self):

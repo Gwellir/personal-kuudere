@@ -602,7 +602,7 @@ class HandlersStructure:
             info = self.jikan.character(id)
             sleep(config.jikan_delay)
             in_anime = [(item['mal_id'], item['name']) for item in info['animeography']]
-            new_anime = [anime for anime in in_anime if (anime[0] in ongoing_ids)]
+            new_anime = [anime for anime in in_anime if (anime[0] in ongoing_ids) or (anime[0] in movie_ids)]
             old_anime = [anime for anime in in_anime if not (anime[0] in ongoing_ids) and (anime[0] in block_list)]
             return info, new_anime, old_anime
 
@@ -619,6 +619,8 @@ class HandlersStructure:
         pprint(mal_character_ids)
         ongoing_ids = [item[0] for item in
                        self.di.select_ongoing_ids().all()]
+        movie_ids = [item[0] for item in
+                     self.di.select_fresh_movie_ids().all()]
         print(ongoing_ids)
         allowed_entries = defaultdict(list)
         waifu_counter = 0
@@ -726,7 +728,7 @@ class HandlersStructure:
             context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено: "{q}"')
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
-                                 parse_mode=ParseMode.HTML)
+                                     parse_mode=ParseMode.HTML)
         sleep(config.jikan_delay)
 
     @staticmethod
