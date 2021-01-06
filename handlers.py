@@ -9,6 +9,7 @@ from telegram import (ParseMode, InlineQueryResultCachedMpeg4Gif, InlineKeyboard
 from telegram.utils.helpers import mention_html
 # my classes
 from entity_data import AnimeEntry
+from handler_modules.voting import Voting, Nominate, VotingUpload
 # service wrappers
 from saucenao import SauceNao
 # additional utilities
@@ -278,6 +279,9 @@ class HandlersStructure:
                 {'command': ['update_lists'], 'function': self.update_lists},
                 {'command': ['send_last'], 'function': self.deliver_last},
                 {'command': ['prep_waifu_list'], 'function': self.process_waifus},
+                {'command': [Voting.command], 'function': Voting()},
+                {'command': [Nominate.command], 'function': Nominate(self.jikan)},
+                {'command': [VotingUpload.command], 'function': VotingUpload()},
             ],
             [
                 # handler for /commands which weren't recognized
@@ -612,7 +616,7 @@ class HandlersStructure:
         link_list = [*entities.values()]
         mal_character_ids = []
         for link in link_list:
-            result = re.match('https://myanimelist\\.net/character/(\d+)/.*', link)
+            result = re.match(r'https://myanimelist\\.net/character/(\d+)/.*', link)
             if result:
                 mal_character_ids.append(result.group(1))
         mal_character_ids = list(set(mal_character_ids))

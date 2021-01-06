@@ -1,12 +1,13 @@
 import abc
+from orm.ORMWrapper import BaseRelations
 
 
 class Handler:
     command = None
 
-    def __init__(self, base_relations):
-        self.br = base_relations
-        self.session = self.br.session
+    def __init__(self):
+        self.br = BaseRelations()
+        # self.session = self.br.session
 
     def __call__(self, update, context):
         self.bot = context.bot
@@ -16,7 +17,7 @@ class Handler:
 
         params = self.parse(context.args)
         result = self.process(params)
-        self.act(result)
+        self.answer(result)
 
     @abc.abstractmethod
     def parse(self, args: list):
@@ -27,16 +28,16 @@ class Handler:
         pass
 
     @abc.abstractmethod
-    def act(self, result):
-        pass
+    def answer(self, result):
+        self.bot.send_message(chat_id=self.chat.id, text=result)
 
 
 class Start(Handler):
     command = 'start'
 
     def __call__(self, update, context):
-        self.act(None)
+        self.answer(None)
 
-    def act(self, result):
+    def answer(self, result):
         self.bot.send_message(chat_id=self.chat.id,
                               text="Бот некоторого аниме-чатика, для регистрации в привате бота введите /reg или /register")

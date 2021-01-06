@@ -9,14 +9,22 @@ class UsersStats(Handler):
     command = 'users'
 
     def select_users_with_ongoing_titles_in_list(self):
-        return self.session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
+        session = self.br.get_session()
+        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
             .filter(ListStatus.status == 1, ListStatus.airing == 1)\
             .filter(ListStatus.show_type.in_(TYPE_LIST))\
             .with_entities(Users.mal_nick).distinct()
+        session.close()
+
+        return result
 
     def select_users_with_any_titles_in_list(self):
-        return self.session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
+        session = self.br.get_session()
+        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
             .with_entities(Users.mal_nick, Users.tg_nick).distinct()
+        session.close()
+
+        return result
 
     def parse(self, args):
         return args
@@ -32,5 +40,5 @@ class UsersStats(Handler):
             msg = f'Список пользователей:\n{users}'
         return msg
 
-    def act(self, result):
+    def answer(self, result):
         self.bot.send_message(chat_id=self.chat.id, text=result)

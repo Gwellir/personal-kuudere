@@ -1,15 +1,35 @@
 # from pprint import pprint
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Index, String, Table, Text, text
+from typing import List, Optional
+
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Index, String, Table, Text, text, Integer, Boolean
 from sqlalchemy.dialects.mysql import BIGINT, ENUM, INTEGER, SMALLINT, TINYINT, VARCHAR, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, relationship
 # from datetime import datetime
-from config import DB
+import config
+from time import sleep
+import jikanpy
 
 
 Base = declarative_base()
 metadata = Base.metadata
+
+
+class BaseRelations:
+    def __init__(self):
+        self._engine = create_engine(config.DB.db_url, echo=True)
+
+        self._SessionFactory = sessionmaker(bind=self._engine)
+        self.connection = None
+
+    def get_session(self):
+        session = Session(self._engine)
+        return session
+
+
+br = BaseRelations()
+jikan = jikanpy.Jikan()
 
 
 class Anime(Base):
@@ -57,6 +77,67 @@ class Anime(Base):
                 self.ended_at.date() if self.ended_at else '...', self.score, self.img_url,
                 (self.synopsis[:500] + (' &lt;...&gt;' if len(self.synopsis) > 500 else ''))
                 if self.synopsis else '[No synopsis available.]', self.mal_aid,)
+
+
+class Characters(Base):
+    __tablename__ = 'characters'
+
+    mal_cid = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, index=True)
+    name_kanji = Column(String, nullable=True)
+    about = Column(Text)
+    image_url = Column(String, nullable=True)
+
+    anime: List[Anime] = relationship('Anime', secondary='anime_x_characters', backref='characters')
+
+    @classmethod
+    def get_or_create(cls, cid, session) -> Optional['Characters']:
+        char = session.query(Characters).filter_by(mal_cid=cid).first()
+        if not char:
+            try:
+                remote_char = jikan.character(cid)
+            except jikanpy.exceptions.APIException as e:
+                print('Chars get_or_create', e.args)
+                return None
+            sleep(config.jikan_delay)
+            anime_ids = [entry['mal_id'] for entry in remote_char['animeography']]
+            related_anime = session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()
+            char = Characters(mal_cid=cid,
+                              name=remote_char['name'],
+                              name_kanji=remote_char['name_kanji'],
+                              about=remote_char['about'],
+                              image_url=remote_char['image_url'],
+                              anime=related_anime)
+            session.add(char)
+            session.commit()
+
+        return char
+
+
+class SeasonalVotings(Base):
+    __tablename__ = 'seasonal_votings'
+
+    id = Column(Integer, primary_key=True)
+    season = Column(String, nullable=False, unique=True)
+    is_current = Column(Boolean, nullable=False, default=False)
+
+    characters = relationship('Characters', secondary='voted_characters', backref='votings')
+
+
+class VotedCharacters(Base):
+    __tablename__ = 'voted_characters'
+    id = Column(Integer, primary_key=True)
+    vid = Column(Integer, ForeignKey('seasonal_votings.id'), nullable=False, index=True)
+    mal_cid = Column(Integer, ForeignKey('characters.mal_cid'), nullable=True)
+    name = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    is_posted = Column(Boolean, nullable=False, default=False)
+    mal_aid = Column(Integer, ForeignKey('anime.mal_aid'), nullable=False)
+
+    voting = relationship('SeasonalVotings')
+    character = relationship('Characters')
+    # anime = relationship('Anime')
 
 
 class Ongoings(Base):
@@ -211,37 +292,11 @@ class Quotes(Base):
         return f"quote #{self.id}, keyword: {self.keyword}\n{self.content}\nby {self.author_id} @ {self.added_at}"
 
 
-class BaseRelations:
-    def __init__(self):
-        self._engine = create_engine(DB.db_url, echo=True)
-
-        self._SessionFactory = sessionmaker(bind=self._engine)
-        self._session_entity = Session(self._engine)
-        self.connection = None
-
-    @property
-    def session(self):
-        return self._session_entity
-
-    def get_conn(self):
-        if self.connection:
-            self.connection.close()
-        self.connection = self._engine.connect()
-        return self.connection
-
-    def close_conn(self):
-        self._session_entity.close()
-        if self.connection:
-            self.connection.close()
-        self._session_entity = Session(self._engine)
-
-    def edit_data(self, q, data=None):
-        conn = self.get_conn()
-        if not data:
-            conn.execute(q)
-        else:
-            conn.execute(q, data)
-        self.close_conn()
+t_anime_x_characters = Table(
+    'anime_x_characters', metadata,
+    Column('mal_aid', ForeignKey('anime.mal_aid'), primary_key=True, nullable=False),
+    Column('mal_cid', ForeignKey('characters.mal_cid'), primary_key=True, nullable=False),
+)
 
 
 t_anime_x_genres = Table(
