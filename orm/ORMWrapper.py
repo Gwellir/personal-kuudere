@@ -5,7 +5,7 @@ from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Index, String,
 from sqlalchemy.dialects.mysql import BIGINT, ENUM, INTEGER, SMALLINT, TINYINT, VARCHAR, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.orm import sessionmaker, relationship
 # from datetime import datetime
 import config
 from time import sleep
@@ -24,7 +24,7 @@ class BaseRelations:
         self.connection = None
 
     def get_session(self):
-        session = Session(self._engine)
+        session = self._SessionFactory()
         return session
 
 

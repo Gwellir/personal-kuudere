@@ -10,7 +10,8 @@ import config
 import requests
 from datetime import datetime
 
-from utils.db_wrapper2 import DataInterface
+from utils.anime_synonyms import Synonyms
+from utils.db_wrapper2 import DataInterface, BaseRelations
 from entity_data import AnimeEntry
 
 PAGE_SIZE = 300
@@ -69,7 +70,7 @@ MONTH_TO_SEASON_DICT = {
 
 
 class ListImporter:
-    def __init__(self, jikan, di, autistic=False):
+    def __init__(self, jikan, di, synonyms, autistic=False):
         """
         Initializes requirements for list parser
 
@@ -79,9 +80,12 @@ class ListImporter:
         """
         self.jikan = jikan
         self.di = di
+        self.synonyms = synonyms
         if autistic:
             self.jikan = Jikan()
-            self.di = DataInterface()
+            self.br = BaseRelations()
+            self.di = DataInterface(self.br)
+            self.synonyms = Synonyms(self.di)
 
     # call this
     def update_all(self):
@@ -225,7 +229,7 @@ class ListImporter:
             while not user and err_count <= API_ERROR_LIMIT:
                 try:
                     user = self.jikan.user(username=user_entry[0])
-                    # pprint(user)
+                    pprint(user)
                     sleep(config.jikan_delay)
                 except simplejson.errors.JSONDecodeError:
                     break
@@ -287,9 +291,10 @@ class ListImporter:
 
         later_season = self.get_anime_season_mal(later=True)
         self.base_update(later_season)
+        self.synonyms.extract_synonyms()
 
-    def has_changed(self, anime):
-        stored_entry = self.di.select_anime_by_id(anime['mal_id']).first()
+    def has_changed(self, anime, session):
+        stored_entry = self.di.select_anime_by_id(anime['mal_id'], sess=session).first()
         # pprint(stored_entry)
         # print(anime['airing_start'][:10])
         # print(str(stored_entry.started_at)[:10])
@@ -311,27 +316,28 @@ class ListImporter:
 
     def base_update(self, anime_list):
         genre_list = [g[0] for g in self.di.select_genres().all()]
-        licensor_list = [lic[0] for lic in self.di.select_licensors().all()]
+        licensor_list = [lic[0].lower() for lic in self.di.select_licensors().all()]
         producer_list = [p[0] for p in self.di.select_producers().all()]
         print(producer_list)
+        session = self.di.br.get_session()
         for anime in anime_list:
             print(f'> {anime["title"]}')
             if anime['genres']:
                 new_genres = [genre for genre in anime['genres'] if genre['mal_id'] not in genre_list]
-                self.di.insert_new_genres(new_genres)
+                self.di.insert_new_genres(new_genres, session)
                 genre_list.extend([genre['mal_id'] for genre in new_genres])
             if anime['licensors']:
-                new_licensors = [licensor for licensor in anime['licensors'] if licensor not in licensor_list]
+                new_licensors = [licensor for licensor in anime['licensors'] if licensor.lower() not in licensor_list]
                 print(new_licensors)
-                self.di.insert_new_licensors(new_licensors)
+                self.di.insert_new_licensors(new_licensors, session)
                 licensor_list.extend([licensor['name'] for licensor in new_licensors])
             if anime['producers']:
                 new_producers = [producer for producer in anime['producers'] if producer['mal_id'] not in producer_list]
                 print(new_producers)
-                self.di.insert_new_producers(new_producers)
+                self.di.insert_new_producers(new_producers, session)
                 producer_list.extend([producer['mal_id'] for producer in new_producers])
             # if not ani_db.select('mal_aid', 'anime', f"mal_aid = %s", [anime['mal_id']]):
-            if self.has_changed(anime):
+            if self.has_changed(anime, session):
                 remote_entry = None
                 err_count = 0
                 while not remote_entry and err_count <= API_ERROR_LIMIT:
@@ -349,17 +355,19 @@ class ListImporter:
                 # sleep(config.jikan_delay)
                 pprint(remote_entry)
                 ae = AnimeEntry(**remote_entry)
-                self.di.upsert_anime_entry(ae)
+                self.di.upsert_anime_entry(ae, session)
                 # new_list.append(anime)
-                self.di.insert_new_axg(anime)
-                self.di.insert_new_axp(anime)
-                self.di.insert_new_axl(anime)
+                self.di.insert_new_axg(anime, session)
+                self.di.insert_new_axp(anime, session)
+                self.di.insert_new_axl(anime, session)
             # sleep(2)
+        session.commit()
+        session.close()
 
 
 if __name__ == '__main__':
-    li = ListImporter(None, None, autistic=True)
-    # li.update_mal_list_status('droidy')
+    li = ListImporter(None, None, None, autistic=True)
+    li.update_mal_list_status('DrumBox')
     # li.update_all()
     # li.get_anime_season_mal()
-    li.update_seasonal()
+    # li.update_seasonal()

@@ -150,7 +150,7 @@ class TorrentFeedParser:
         self.jikan = jikan
         self.di = di
 
-    def add_to_db(self, a_title, a_date, a_link, a_description):
+    def add_to_db(self, a_title, a_date, a_link, a_description, session):
         """
         Inserts an entry into database, or updates it in case of remote edits (very rare occurrence).
 
@@ -160,10 +160,10 @@ class TorrentFeedParser:
         :param a_description:
         :return:
         """
-        if not self.di.select_feed_entry_by_title_and_date(a_title, a_date).first():
-            self.di.insert_new_feed_entry(a_title, a_date, a_link, a_description)
+        if not self.di.select_feed_entry_by_title_and_date(a_title, a_date, session).first():
+            self.di.insert_new_feed_entry(a_title, a_date, a_link, a_description, session)
         else:
-            self.di.update_anifeeds_entry(a_link, a_description, a_title, a_date)
+            self.di.update_anifeeds_entry(a_link, a_description, a_title, a_date, session)
 
     def get_last_entry(self):
         last_entry = self.di.select_last_feed_entry().first()
@@ -171,7 +171,7 @@ class TorrentFeedParser:
 
     # todo scraping if no overlap?
     # todo SET MYSQL TIMEZONES
-    def read_article_feed(self, rss_feed):
+    def read_article_feed(self, rss_feed, session):
         """
         Parses new feed entries, checks for overlap with stored entries, prepares and stores data in database.
 
@@ -198,7 +198,7 @@ class TorrentFeedParser:
             dt = article.published_parsed
             dt_local = get_local_time(dt)
             dt_repr = str(dt_local + d_3h)[:19]
-            self.add_to_db(article['title'], dt_repr, article['link'], article['description'])
+            self.add_to_db(article['title'], dt_repr, article['link'], article['description'], session)
             print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
 
     def check_feeds(self):
@@ -208,17 +208,20 @@ class TorrentFeedParser:
         Should be called from outside this class.
         :return:
         """
+        session = self.di.br.get_session()
         for feed in self.MY_FEEDS:
-            self.read_article_feed(feed)
-        release_list = self.di.select_unchecked_feed_entries().all()
+            self.read_article_feed(feed, session)
+        release_list = self.di.select_unchecked_feed_entries(session).all()
         for release in release_list:
-            self.do_recognize(release.title, release.date, release.link, parse_size(release.description))  # just use a fucking hash as torrent identity
+            self.do_recognize(release.title, release.date, release.link, parse_size(release.description), session)  # just use a fucking hash as torrent identity
+        session.commit()
+        session.close()
 
     # todo batch parsing and delivery (possibly subscribe for complete seasons?)
     # todo fix parentheses adding spare spaces to recognized title name
     # todo avoid accidentally hitting SQL VARCHAR column size limits
     # todo version/recap parsing
-    def do_recognize(self, a_title, a_date, torrent_link, file_size):
+    def do_recognize(self, a_title, a_date, torrent_link, file_size, session):
         """
         Tries to recognize a parsed title of an anime release, match it to its MAL entry, store relevant information
         in DB and save related torrent file for potential further delivery.
@@ -233,10 +236,15 @@ class TorrentFeedParser:
         if a_ep_no and a_group and a_title:
             print(f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
                   f' ext ({a_ext if a_ext else "n/a"})')
-            mal_id = self.di.select_ongoing_anime_id_by_synonym(a_title).first()
+            mal_id = self.di.select_ongoing_anime_id_by_synonym(a_title, session).first()
             if not mal_id:
-                mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title).all()
-                if not mal_ids:
+                mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title, session).all()
+                if mal_ids and len(mal_ids) == 1:
+                    print(mal_ids[0])
+                    mal_id = mal_ids[0]
+                # elif not mal_ids:
+                # todo unify lurking and title comparision
+                else:
                     search_results = None
                     try:
                         search_results = self.jikan.search('anime', a_title, page=1,
@@ -249,34 +257,32 @@ class TorrentFeedParser:
                     except APIException:
                         pass
                     sleep(jikan_delay)
-                # if len(mal_ids) == 1:
-                #     print(mal_ids[0])
-                #     mal_id = mal_ids[0]
+
                 # else:
                     print(f"Can't get a precise result... {mal_ids}")
                     if search_results:
                         mal_id = title_compare(search_results['results'], a_title)
                 # check whether we have title info
                 if mal_id:
-                    if not self.di.select_anime_id_is_in_database(mal_id).first():
+                    if not self.di.select_anime_id_is_in_database(mal_id, session).first():
                         a_info = self.jikan.anime(mal_id)
                         sleep(jikan_delay)
                         # is sometimes unreachable
-                        self.di.upsert_anime_entry(a_info)
+                        self.di.upsert_anime_entry(a_info, session)
                     # todo sometimes a double can make it here despite synonym check
                     self.di.insert_new_synonym(mal_id, a_title)
             else:
                 pass
-            self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title, a_date)
+            self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title, a_date, session)
             if mal_id:
-                self.torrent_save(mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size)
+                self.torrent_save(mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size, session)
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
-            self.di.update_anifeeds_unrecognized_entry(file_size, save_title, a_date)
+            self.di.update_anifeeds_unrecognized_entry(file_size, save_title, a_date, session)
         return
 
     # todo implement actual check for files which failed to download
-    def torrent_save(self, mal_id, group, episode, link, title, res, size):
+    def torrent_save(self, mal_id, group, episode, link, title, res, size, session):
         """
         Downloads, names and saves a torrent file using information from a parsed nyaa.si feed entry.
 
@@ -289,7 +295,7 @@ class TorrentFeedParser:
         :param size:
         :returns: Name of local torrent file
         """
-        approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id).one()
+        approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id, session).one()
         if approved_ep and int(episode) > approved_ep[0]:
             print(f'  >>> FAKE {title} - {episode} by {group}')
             return
@@ -305,9 +311,9 @@ class TorrentFeedParser:
             f.close()
             print(f'Downloaded "{link}" for {title}({mal_id}) ep {episode} from {group}, size - {size}')
         if is_downloaded:
-            entry_exists = self.di.select_torrent_is_saved_in_database(mal_id, group, episode, res, size).first()
+            entry_exists = self.di.select_torrent_is_saved_in_database(mal_id, group, episode, res, size, session).first()
             if not entry_exists:
-                self.di.insert_new_torrent_file(mal_id, group, episode, filename, res, size)
+                self.di.insert_new_torrent_file(mal_id, group, episode, filename, res, size, session)
             else:
                 print('DUPLICATE ', [mal_id, group, episode, res, size])
             return filename
