@@ -2,6 +2,14 @@ import abc
 from orm.ORMWrapper import BaseRelations
 
 
+class HandlerError(Exception):
+    def __init__(self, error_msg):
+        self._error_msg = error_msg
+
+    def __str__(self):
+        return f'{self._error_msg}'
+
+
 class Handler:
     command = None
 
@@ -15,9 +23,15 @@ class Handler:
         self.chat = update.effective_chat
         self.user = update.effective_user
 
-        params = self.parse(context.args)
-        result = self.process(params)
-        self.answer(result)
+        self._run(context.args)
+
+    def _run(self, args):
+        try:
+            params = self.parse(args)
+            result = self.process(params)
+            self.answer(result)
+        except HandlerError as err:
+            self.answer(f'Ошибка хендлера:\n{err}')
 
     @abc.abstractmethod
     def parse(self, args: list):

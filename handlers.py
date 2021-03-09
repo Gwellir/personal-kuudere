@@ -10,6 +10,7 @@ from telegram.utils.helpers import mention_html
 # my classes
 from entity_data import AnimeEntry
 from handler_modules.voting import Voting, Nominate, VotingUpload
+from handler_modules.random import AnimeSelector
 # service wrappers
 from saucenao import SauceNao
 # additional utilities
@@ -94,8 +95,12 @@ class UtilityFunctions:
         self.di.delete_tracked_anime(uid, aid)
         return True
 
+    # todo add synonyms
     def store_anime(self, a_entry):
-        self.di.upsert_anime_entry(a_entry)
+        session = self.di.br.get_session()
+        self.di.upsert_anime_entry(a_entry, session)
+        session.commit()
+        session.close()
 
     def get_anime_by_aid(self, mal_aid):
         local_result = self.di.select_anime_by_id(mal_aid).first()
@@ -127,7 +132,7 @@ class UtilityFunctions:
                 producers=None, rank=None, rating=None, related=None, request_cache_expiry=None, request_cached=None,
                 request_hash=None, scored_by=None, source=None, studios=None, title_english=None, title_japanese=None,
                 title_synonyms=None, trailer_url=None)
-            if 'chain' in self.relations[anime.mal_aid]:
+            if anime.mal_aid in self.relations and 'chain' in self.relations[anime.mal_aid]:
                 franchise = [f'<a href="https://myanimelist.net/anime/{anime_id}">{self.relations[anime_id]["title"]}</a>'
                              if anime_id != anime.mal_aid else f'<b>{self.relations[anime_id]["title"]}</b>'
                              for anime_id in self.relations[anime.mal_aid]['chain']]
@@ -168,6 +173,7 @@ class UtilityFunctions:
 
             mal_info = [(result['mal_id'], result['title'], result['airing'], result['type'], result['members'])
                         for result in search_results['results']]
+            self.get_anime_by_aid(mal_info[0][0])
         else:
             # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
             mal_info = sorted(mal_info, key=lambda item: len(item[1]))
@@ -251,7 +257,8 @@ class HandlersStructure:
                 {'command': ['stats'], 'function': self.show_stats},
                 {'command': ['lockout'], 'function': self.show_lockouts},
                 {'command': ['future'], 'function': self.show_awaited},
-                {'command': ['random'], 'function': self.random_choice},
+                # {'command': ['random'], 'function': self.random_choice},
+                {'command': [AnimeSelector.command], 'function': AnimeSelector(di=self.di)},
                 {'command': ['users'], 'function': self.users_stats},
                 # {'command': ['source'], 'function': self.ask_saucenao},
                 {'message': 'sticker', 'function': self.convert_webp},
@@ -316,102 +323,6 @@ class HandlersStructure:
             pm = None
         context.bot.send_message(chat_id=update.effective_chat.id, text=info_post[0], parse_mode=pm,
                                  disable_web_page_preview=True)
-
-    def random_choice(self, update, context):
-        def parse_random_command(opts):
-            parser = argparse.ArgumentParser(description='Get random anime from stored userlists.')
-            group_score = parser.add_argument_group()
-            # group_ptw_score.add_argument('-p', '--ptw', action='store_true')
-            group_score.add_argument('-s', '--score', nargs='+', type=int)
-            parser.add_argument('-u', '--users', nargs='+')
-            parser.add_argument('-t', '--type', nargs='+')
-
-            parsed = None
-            try:
-                parsed = parser.parse_args(opts)
-            except:
-                pprint(parsed)
-
-            return parsed
-
-        params = parse_random_command(context.args)
-        if not context.args:
-            user_list = [entry[0] for entry in self.di.select_user_tg_ids().all()]
-            if update.effective_user.id not in user_list:
-                context.bot.send_message(chat_id=update.effective_chat.id,
-                                         text='Вы не зарегистрированы на боте, используйте /reg в моём привате!')
-                return
-            ptw_list = self.di.select_ptw_list_by_user_tg_id(update.effective_user.id).all()
-            answer = None
-            if ptw_list:
-                answer = rand_choice(ptw_list)
-            msg = 'Случайное аниме из PTW:\n\n'
-            msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a>'\
-                if answer else 'в PTW не найдено тайтлов'
-        else:
-            pprint(params)
-            ignored_list = [str(entry) for entry in [1306893]]  # toiro
-            if not params:
-                msg = 'Использование:\n<code>/random</code> - случайное аниме из вашего PTW, либо\n' \
-                      '<code>/random [-s X [Y]] [-u user1 user2...] [-t type1* type2*...]</code> - ' \
-                      'случайная рекомендация с оценкой из интервала X-Y из списков пользователей бота.\n' \
-                      '<code>/random [-u user1 user2...] [-t type1* type2*...]</code> - ' \
-                      'случайная рекомендация из списков PTW пользователей бота.\n\n' \
-                      '<code>*типы - TV, Movie, OVA, ONA, Special, Music, Unknown, Other</code>'
-            else:
-                if params.score and len(params.score) == 1:
-                    params.score.append(params.score[0])
-                if params.score and (params.score[0] not in range(1, 11) or params.score[1] not in range(1, 11)):
-                    msg = 'Оценка должна быть в диапазоне от 1 до 10'
-                else:
-                    registered_users = [entry[0].lower() for entry in self.di.select_registered_user_nicks().all()]
-                    if params.users:
-                        legit_users = [user.lower() for user in params.users if user.lower() in registered_users]
-                    else:
-                        legit_users = [user.lower() for user in registered_users]
-                    if params.type:
-                        types_lower = [type_.lower() for type_ in params.type]
-                    else:
-                        types_lower = ['tv', 'ova', 'movie', 'ona', 'special', 'unknown', 'music', 'other']
-                    your_list = [entry[0] for entry in
-                                 self.di.select_watched_list_by_user_tg_id(update.effective_user.id).all()]
-                    if not params.score:
-                        mal_nicks = params.users
-                        ptw_list = self.di.select_ptw_lists_by_usernames(mal_nicks).all()
-                        recommended_list = [entry for entry in ptw_list
-                                            if entry[2].lower() in legit_users
-                                            and entry[3].lower() in types_lower
-                                            and entry[1] not in your_list]
-                        answer = None
-                        if recommended_list:
-                            answer = rand_choice(recommended_list)
-                        sep = ', '
-                        msg = f'<b>Случайное аниме из PTW</b>:\n'
-                        msg += f'<b>пользователи</b>: {sep.join(mal_nicks)}\n' if params.users else ''
-                        msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
-                        msg += f'\n<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}' \
-                            if answer else '\nв PTW не найдено тайтлов'
-                    else:
-                        list_by_score = self.di.select_watched_titles_in_score_interval(params.score[0],
-                                                                                        params.score[1],
-                                                                                        ignored_list).all()
-                        recommended_list = [entry for entry in list_by_score
-                                            if entry[2].lower() in legit_users
-                                            and entry[3].lower() in types_lower
-                                            and entry[1] not in your_list]
-                        print(len(recommended_list), 'items remaining')
-                        answer = None
-                        if recommended_list:
-                            answer = rand_choice(recommended_list)
-                        sep = ', '
-                        msg = f'<b>Случайное аниме из сохранённых списков</b>:\n'
-                        msg += f'<b>пользователи</b>: {sep.join(legit_users)}\n' if params.users else ''
-                        msg += f'<b>тип</b>: {sep.join(types_lower)}\n' if params.type else ''
-                        msg += f'<b>оценка</b>: [{params.score[0]}-{params.score[1]}]\n\n' if params.score[0] != params.score[1]\
-                            else f'<b>оценка</b>: [{params.score[0]}]\n\n'
-                        msg += f'<a href="https://myanimelist.net/anime/{answer[1]}">{answer[0]}</a> ({answer[3]}) - {answer[2]}'\
-                            if answer else 'в списках не найдено подходящих тайтлов'
-        context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
 
     def quotes(self, update, context):
         q = ' '.join(context.args)
@@ -496,13 +407,19 @@ class HandlersStructure:
         context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
     def torrents_stats(self, update, context):
-        torrents = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]}\n ({t[2]})'
-                              for t in self.di.select_all_recognized_titles_stats().all()
-                              ])
-        # print(torrents)
-        msg = f'Список отслеживаемых торрентов:\n{torrents}'
-        context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML,
-                                 disable_web_page_preview=True)
+        all_titles = self.di.select_all_recognized_titles_stats().all()
+        count = 0
+        size = 50
+        while count < len(all_titles):
+            msg = f'Список отслеживаемых торрентов:\n' if count == 0 else ''
+            torrents = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]}\n ({t[2]})'
+                                  for t in all_titles[count:count + size]
+                                  ])
+            context.bot.send_message(chat_id=update.effective_chat.id,
+                                     text=f'{msg}{torrents}',
+                                     parse_mode=ParseMode.HTML,
+                                     disable_web_page_preview=True)
+            count += size
 
     def show_lockouts(self, update, context):
         lockouts = '\n'.join([f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]} (до {t[2] + timedelta(hours=24)})'
@@ -582,6 +499,11 @@ class HandlersStructure:
         titles = None
         if len(q) > 0:
             matches = self.utilities.lookup_anime_info_by_title(q)
+            answer = {
+                'chat_id': update.effective_chat.id,
+                'parse_mode': ParseMode.HTML,
+                'reply_to_message_id': update.effective_message.message_id,
+            }
             if matches:
                 titles = [(entry[1], entry[0]) for entry in matches]
             if titles:
@@ -596,10 +518,11 @@ class HandlersStructure:
                 ptw = '\n'.join([f'{item[0]} ({status_dict[item[2]] + (f": {item[3]}" if item[3] != 0 else "")})'
                                  for item in select_seen if item[2] == 6])
                 msg += f'Оценки для тайтла:\n<b>{title[0]}</b>\n\n' + watched + ('\n\n' + ptw if ptw else '')
-                context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode=ParseMode.HTML)
+                answer['text'] = msg
             else:
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено:\n<b>{q}</b>',
-                                         parse_mode=ParseMode.HTML)
+                answer['text'] = f'Не найдено:\n<b>{q}</b>'
+
+            context.bot.send_message(**answer)
 
     def process_waifus(self, update, context):
         def waifu_in_anime(id, block_list):
@@ -722,18 +645,21 @@ class HandlersStructure:
             context.bot.send_message(chat_id=update.effective_chat.id,
                                      text='В заданном списке не найдено аниме из ваших подписок.')
 
-    # TODO implement work with db
     def show_anime(self, update, context):
         if not context.args:
             return
         q = ' '.join(context.args)
         output = self.utilities.get_anime_info(q)
+        answer = {
+            'chat_id': update.effective_chat.id,
+            'parse_mode': ParseMode.HTML,
+            'reply_to_message_id': update.effective_message.message_id,
+        }
         if not output:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Не найдено: "{q}"')
+            answer['text'] = f'Не найдено: "{q}"'
         else:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f'{output}',
-                                     parse_mode=ParseMode.HTML)
-        sleep(config.jikan_delay)
+            answer['text'] = f'{output}'
+        context.bot.send_message(**answer)
 
     @staticmethod
     def convert_webp(update, context):
