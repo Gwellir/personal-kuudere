@@ -140,12 +140,12 @@ class AnimeSelector(Handler):
             if self.params.score:
                 msg += f'<b>оценка</b>: [{self.params.score[0]}-{self.params.score[1]}]\n\n' \
                     if self.params.score[0] != self.params.score[1] \
-                    else f'<b>оценка</b>: [{self.params.score[0]}]\n\n'
+                    else f'<b>оценка</b>: [{self.params.score[0]}]\n'
             if self.params.rating:
                 msg += f'<b>рейтинг</b>: [{self.params.rating[0]}-{self.params.rating[1]}]\n\n' \
                     if self.params.rating[0] != self.params.rating[1] \
-                    else f'<b>рейтинг</b>: [{self.params.rating[0]}]\n\n'
-            msg += f'<a href="https://myanimelist.net/anime/{entry.mal_aid}">{entry.title}</a>' \
+                    else f'<b>рейтинг</b>: [{self.params.rating[0]}]\n'
+            msg += f'\n<a href="https://myanimelist.net/anime/{entry.mal_aid}">{entry.title}</a>' \
                    f' ({entry.show_type}{" - %s эп." % entry.eps if entry.eps > 1 else ""})' \
                    f' - {entry.users.tg_nick} ({entry.score})' \
                 if entry else 'в списках не найдено подходящих тайтлов'
