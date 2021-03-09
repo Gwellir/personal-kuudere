@@ -1,4 +1,7 @@
 import abc
+
+from telegram import ParseMode
+
 from orm.ORMWrapper import BaseRelations
 
 
@@ -31,7 +34,11 @@ class Handler:
             result = self.process(params)
             self.answer(result)
         except HandlerError as err:
-            self.answer(f'Ошибка хендлера:\n{err}')
+            self.bot.send_message(chat_id=self.chat.id,
+                                  text=f'Ошибка!\n{err}',
+                                  parse_mode=ParseMode.HTML,
+                                  reply_to_message_id=self.message.message_id,
+                                  )
 
     @abc.abstractmethod
     def parse(self, args: list):

@@ -10,12 +10,12 @@ from orm.ORMWrapper import Users, ListStatus, Anime, Genres, t_anime_x_genres
 from utils.db_wrapper2 import DataInterface
 
 
-HELP_MSG = 'Использование:\n<code>/random</code> - случайное аниме из вашего PTW, либо\n' \
-            '<code>/random [-s X [Y]] [-u user1 user2...] [-t type1* type2*...]</code> - ' \
-            'случайная рекомендация с оценкой из интервала X-Y из списков пользователей бота.\n' \
-            '<code>/random [-u user1 user2...] [-t type1* type2*...]</code> - ' \
-            'случайная рекомендация из списков PTW пользователей бота.\n\n' \
-            '<code>*типы - TV, Movie, OVA, ONA, Special, Music, Unknown, Other</code>'
+HELP_MSG = 'Использование:\n<code>/random [-t type1* type2*...] [-g genre1* genre2*...] [-r rating X [Y]]</code>' \
+           ' - случайное аниме из вашего PTW, фильтры по жанрам, типу, рейтингу на MAL, либо\n' \
+           '<code>/random [-s X [Y]] [-u user1 user2...] [-t type1* type2*...] [-g genre1* genre2*...] [-r rating X [Y]]</code> - ' \
+           'случайная рекомендация с оценкой из интервала X-Y из списков пользователей бота' \
+           '(фильтры по оценке, пользователям, жанрам, типу, рейтингу на MAL).\n\n' \
+           '<code>*типы - TV, Movie, OVA, ONA, Special, Music, Unknown, Other</code>'
 ALL_TYPES = ['tv', 'ova', 'movie', 'ona', 'special', 'unknown', 'music', 'other']
 
 
@@ -47,10 +47,10 @@ class AnimeSelector(Handler):
         parser.add_argument('-r', '--rating', nargs='+', type=float)
 
         parsed = None
-        try:
-            parsed = parser.parse_args(opts)
-        except argparse.ArgumentError as err:
-            raise HandlerError(HELP_MSG)
+        # try:
+        parsed = parser.parse_args(opts)
+        # except argparse.ArgumentError as err:
+        #     raise HandlerError(HELP_MSG)
 
         return parsed
 
@@ -59,12 +59,26 @@ class AnimeSelector(Handler):
             raise HandlerError('Вы не зарегистрированы на боте, используйте /reg в моём привате!')
 
         self.params = self._parse_random_command(args)
+        if self.params.users:
+            self.params.users = [user.lower() for user in self.params.users]
+        if self.params.genres:
+            self.params.genres = [genre.lower() for genre in self.params.genres]
         return self.params
 
     def _apply_user_filter(self, users):
         if users:
-            self.params.users = [entry for entry in users if (entry,) in self.di.select_registered_user_nicks().all()]
-            self.query = self.query.filter(Users.tg_nick.in_(users))
+            registered_users = self.session.query(Users).\
+                filter(Users.tg_nick != None, Users.tg_nick.in_(users)).with_entities(Users.tg_nick)
+            registered_users_list = [entry[0].lower() for entry in registered_users.all()]
+            wrong_users = set(users) - set(registered_users_list)
+            if wrong_users:
+                users_str = ', '.join(wrong_users)
+                raise HandlerError(f'Указаны несуществующие пользователи: <code>{users_str}</code>\n'
+                                   f'Проверьте, что используется ник из Telegram, и cоответствующий пользователь'
+                                   f' зарегистрирован на боте!')
+
+            users = registered_users_list
+            self.query = self.query.filter(Users.tg_nick.in_(registered_users))
 
     def _apply_score_filter(self, score):
         if not score:
@@ -83,6 +97,11 @@ class AnimeSelector(Handler):
 
     def _apply_genre_filter(self, genres, query):
         if genres:
+            mal_genres = [entry[0].lower() for entry in self.session.query(Genres.name).all()]
+            wrong_genres = set(genres) - set(mal_genres)
+            if wrong_genres:
+                genres_str = ', '.join(wrong_genres)
+                raise HandlerError(f'Указаны несуществующие жанры: <code>{genres_str}</code>')
             query = query.join(t_anime_x_genres).join(Genres).\
             filter(Genres.name.in_(genres)).group_by(Anime.mal_aid).having(func.count(Anime.mal_aid) == len(genres))
 
@@ -101,22 +120,26 @@ class AnimeSelector(Handler):
         return query
 
     def process(self, params):
-        anime_query = self.session.query(Anime)
-        anime_query = self._apply_genre_filter(params.genres, anime_query)
-        anime_query = self._apply_rating_filter(params.rating, anime_query)
         # anime_id_list = [entry[0] for entry in self.query.with_entities(Anime.mal_aid).all()]
         self.query = self.session.query(ListStatus). \
             join(Users, ListStatus.user_id == Users.mal_uid). \
             filter(ListStatus.airing == 2)  # finished
         if params.rating or params.genres:
+            params.genres = [' '.join(genre.split('_')) for genre in params.genres]
+            anime_query = self.session.query(Anime)
+            anime_query = self._apply_genre_filter(params.genres, anime_query)
+            anime_query = self._apply_rating_filter(params.rating, anime_query)
             self.query = self.query.filter(ListStatus.mal_aid.in_(anime_query.with_entities(Anime.mal_aid)))
         if not params.score and not params.users:
             self.query = self.query.filter(Users.tg_id == self.user.id,
                                            ListStatus.status == 6)
         else:
             self._own_list = False
-            own_aids_query = self.query.filter(Users.tg_id == self.user.id, ListStatus.status != 6). \
-                with_entities(ListStatus.mal_aid)
+            own_aids_query = []
+            # todo separate into check_force_own or something
+            if not self.params.users or (self.user.username.lower() not in self.params.users):
+                own_aids_query = self.query.filter(Users.tg_id == self.user.id, ListStatus.status != 6). \
+                    with_entities(ListStatus.mal_aid)
             self.query = self.query.filter(ListStatus.status != 6, ListStatus.mal_aid.notin_(own_aids_query))
             self._apply_user_filter(params.users)
             self._apply_score_filter(params.score)
@@ -150,5 +173,9 @@ class AnimeSelector(Handler):
                    f' - {entry.users.tg_nick} ({entry.score})' \
                 if entry else 'в списках не найдено подходящих тайтлов'
 
-        self.bot.send_message(chat_id=self.chat.id, text=msg, parse_mode=ParseMode.HTML)
+        self.bot.send_message(chat_id=self.chat.id,
+                              text=msg,
+                              parse_mode=ParseMode.HTML,
+                              reply_to_message_id=self.message.message_id,
+                              )
         self.session.close()
