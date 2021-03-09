@@ -138,11 +138,11 @@ class AnimeSelector(Handler):
             msg += f'<b>жанры</b>: {sep.join(self.params.genres)}\n' if self.params.genres else ''
 
             if self.params.score:
-                msg += f'<b>оценка</b>: [{self.params.score[0]}-{self.params.score[1]}]\n\n' \
+                msg += f'<b>оценка</b>: [{self.params.score[0]}-{self.params.score[1]}]\n' \
                     if self.params.score[0] != self.params.score[1] \
                     else f'<b>оценка</b>: [{self.params.score[0]}]\n'
             if self.params.rating:
-                msg += f'<b>рейтинг</b>: [{self.params.rating[0]}-{self.params.rating[1]}]\n\n' \
+                msg += f'<b>рейтинг</b>: [{self.params.rating[0]}-{self.params.rating[1]}]\n' \
                     if self.params.rating[0] != self.params.rating[1] \
                     else f'<b>рейтинг</b>: [{self.params.rating[0]}]\n'
             msg += f'\n<a href="https://myanimelist.net/anime/{entry.mal_aid}">{entry.title}</a>' \
