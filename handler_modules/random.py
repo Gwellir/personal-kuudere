@@ -93,7 +93,7 @@ class AnimeSelector(Handler):
             return query
         if len(rating) == 1:
             rating.append(rating[0])
-        if rating[0] not in range(1, 11) or rating[1] not in range(1, 11):
+        if not 1 <= rating[0] <= 10 or not 1 <= rating[1] <= 10:
             raise HandlerError('Рейтинг аниме должен быть в диапазоне от 1 до 10')
         else:
             query = query.filter(Anime.score >= rating[0], Anime.score <= rating[1])
@@ -115,14 +115,13 @@ class AnimeSelector(Handler):
                                            ListStatus.status == 6)
         else:
             self._own_list = False
-            self.query = self.query.filter(ListStatus.status != 6, ListStatus.airing )
+            own_aids_query = self.query.filter(Users.tg_id == self.user.id, ListStatus.status != 6). \
+                with_entities(ListStatus.mal_aid)
+            self.query = self.query.filter(ListStatus.status != 6, ListStatus.mal_aid.notin_(own_aids_query))
             self._apply_user_filter(params.users)
             self._apply_score_filter(params.score)
         self._apply_type_filter(params.types)
-        result = self.query.all()
-        self.session.close()
-
-        return result
+        return self.query.all()
 
     def answer(self, result):
         entry = rand_choice(result) if result else None
@@ -136,7 +135,7 @@ class AnimeSelector(Handler):
             msg = f'<b>Случайное аниме из сохранённых списков</b>:\n'
             msg += f'<b>пользователи</b>: {sep.join(self.params.users)}\n' if self.params.users else ''
             msg += f'<b>тип</b>: {sep.join(self.params.types)}\n' if self.params.types else ''
-            msg += f'<b>тип</b>: {sep.join(self.params.genres)}\n' if self.params.genres else ''
+            msg += f'<b>жанры</b>: {sep.join(self.params.genres)}\n' if self.params.genres else ''
 
             if self.params.score:
                 msg += f'<b>оценка</b>: [{self.params.score[0]}-{self.params.score[1]}]\n\n' \
@@ -152,3 +151,4 @@ class AnimeSelector(Handler):
                 if entry else 'в списках не найдено подходящих тайтлов'
 
         self.bot.send_message(chat_id=self.chat.id, text=msg, parse_mode=ParseMode.HTML)
+        self.session.close()
