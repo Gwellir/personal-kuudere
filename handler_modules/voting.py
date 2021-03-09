@@ -88,6 +88,7 @@ class Nominate(Handler):
     def __init__(self, jikan):
         super().__init__()
         self.jikan = jikan
+        self._force = False
 
     def _get_voting(self):
         session = self.br.get_session()
@@ -95,19 +96,25 @@ class Nominate(Handler):
         session.close()
         return result
 
+    # todo merge with prep_waifu_list older anime checks
     def _get_char_stats(self, cid, voting):
         session = self.br.get_session()
         char = Characters.get_or_create(cid, session)
         if not char:
             raise CharIDNotFoundError
-        legit_sources = [anime for anime in char.anime
-                         if anime.premiered and anime.premiered.lower() == voting.season]
-        if not legit_sources:
-            raise NoLegitAnimeError
-        legit_sources.sort(key=lambda item: item.popularity, reverse=True)
+        if self._force:
+            sources = sorted([anime for anime in char.anime], key=lambda item: item.popularity, reverse=True)
+            source = sources[0] if sources else None
+        else:
+            legit_sources = [anime for anime in char.anime
+                             if anime.premiered and anime.premiered.lower() == voting.season]
+            if not legit_sources:
+                raise NoLegitAnimeError
+            legit_sources.sort(key=lambda item: item.popularity, reverse=True)
+            source = legit_sources[0]
         session.close()
 
-        return char.name, legit_sources[0], char.image_url
+        return char.name, source, char.image_url
 
     def _parse_entry(self, entry, voting):
         cid = name = source = image_url = None
@@ -145,6 +152,8 @@ class Nominate(Handler):
         return candidate
 
     def parse(self, args):
+        if args[0] == 'force':
+            self._force = True
         voting = self._get_voting()
         message = '\n'.join(self.message.text.split('\n')[1:])
         entries = message.split('\n\n')
@@ -198,7 +207,7 @@ class VotingUpload(Handler):
     def process(self, params):
         bracket_id, ab_sess, _auth = params
         session = self.br.get_session()
-        candidates: Tuple[VotedCharacters] = session.query(VotedCharacters).filter_by(is_posted=False).all()
+        candidates = list(session.query(VotedCharacters).filter_by(is_posted=False).all())
         errors = []
         if candidates:
             url = 'https://animebracket.com/submit/'
@@ -222,9 +231,12 @@ class VotingUpload(Handler):
                 q = requests.post(url, cookies=cookies, headers=headers, data=data, params=params)
                 if q.text == '{"success":true}':
                     entry.is_posted = True
+                elif q.text == '{"success":false,"message":"You\'re doing that too fast!"}':
+                    sleep(2)
+                    candidates.append(entry)
                 else:
                     errors.append(f'{entry.name}: "{q.text}"')
-                sleep(1)
+                sleep(2)
             session.commit()
 
         session.close()
