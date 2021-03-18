@@ -53,5 +53,5 @@ class BotJobs:
             except BadRequest:
                 self.updater.bot.send_message(chat_id=config.dev_tg_id, text=f"USER NOT BOUND:\n{entry[0]}")
 
-    def update_seasons(self):
+    def update_seasons(self, callback):
         self.li.update_seasonal()
