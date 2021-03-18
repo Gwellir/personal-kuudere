@@ -14,6 +14,20 @@ logging.basicConfig(handlers=[logging.FileHandler(filename='log/tgbot.log', enco
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
+
+def get_handler_filters(handler: dict):
+    filters = Filters.chat(config.dev_tg_id)
+    if not handler.get('admin', False):
+        filters = filters | Filters.chat_type.private
+        if not handler.get('private', False):
+            chats = handler.get('chats', [])
+            if not handler.get('no_main', False):
+                chats.append(config.gacha_chat)
+            filters = filters | Filters.chat(chats)
+
+    return filters
+
+
 # telegram.ext initialization
 updater = Updater(token=config.token, use_context=True)
 jobs = updater.job_queue
@@ -21,7 +35,7 @@ dispatcher = updater.dispatcher
 
 core = BotCore(updater)
 
-job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=0)
+# job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=0)
 announce_time = datetime.strptime("14:01 +0300", "%H:%M %z").time()
 job_show_digest = jobs.run_daily(core.jobs.show_daily_events, announce_time)
 list_update_time = datetime.strptime("04:03 +0300", "%H:%M %z").time()
@@ -41,13 +55,13 @@ filter_type_dict = {
 for category in core.handlers.handlers_list:
     for handler in category:
         if 'command' in handler.keys():
-            dispatcher.add_handler(CommandHandler(handler['command'], handler['function']))
-        elif 'catcher' in handler.keys():
-            dispatcher.add_handler(MessageHandler(Filters.chat(chat_id=handler['catcher']), handler['function']))
-        elif 'anti_catcher' in handler.keys():
-            dispatcher.add_handler(MessageHandler(~ Filters.chat(chat_id=handler['anti_catcher']), handler['function']))
+            dispatcher.add_handler(CommandHandler(handler['command'],
+                                                  handler['function'],
+                                                  filters=get_handler_filters(handler)),
+                                   )
         elif 'message' in handler.keys():
-            dispatcher.add_handler(MessageHandler(filter_type_dict[handler['message']], handler['function']))
+            dispatcher.add_handler(MessageHandler(filter_type_dict[handler['message']] & get_handler_filters(handler) ,
+                                                  handler['function']))
         elif 'inline' in handler.keys():
             dispatcher.add_handler(InlineQueryHandler(handler['function']))
         elif 'callback' in handler.keys():

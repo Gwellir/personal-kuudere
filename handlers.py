@@ -10,7 +10,7 @@ from telegram.utils.helpers import mention_html
 # my classes
 from entity_data import AnimeEntry
 from handler_modules.voting import Voting, Nominate, VotingUpload
-from handler_modules.random import AnimeSelector
+from handler_modules.random import AnimeSelector, AnimeFilter
 # service wrappers
 from saucenao import SauceNao
 # additional utilities
@@ -42,8 +42,15 @@ def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
 
 
 class HandlersList(namedtuple('HandlersList',
-                              ['chat', 'private_delim', 'private', 'admin_delim', 'admin', 'unknown', 'inline',
-                               'callbacks', 'error'])):
+                              ['chat',
+                               # 'private_delim',
+                               'private',
+                               # 'admin_delim',
+                               'admin',
+                               # 'unknown',
+                               'inline',
+                               'callbacks',
+                               'error'])):
     pass
 
 
@@ -57,7 +64,8 @@ def detect_unused_handlers(handlers_structure):
     set_of_handlers = set(listed_handlers)
     unused_functions = list(func_object_list - set_of_handlers)
     if unused_functions:
-        raise Exception(f'Unused handlers detected:\n{unused_functions}')
+        # raise Exception(f'Unused handlers detected:\n{unused_functions}')
+        pprint(unused_functions)
 
 
 class UtilityFunctions:
@@ -173,7 +181,10 @@ class UtilityFunctions:
 
             mal_info = [(result['mal_id'], result['title'], result['airing'], result['type'], result['members'])
                         for result in search_results['results']]
-            self.get_anime_by_aid(mal_info[0][0])
+            if mal_info:
+                self.get_anime_by_aid(mal_info[0][0])
+            else:
+                return None
         else:
             # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
             mal_info = sorted(mal_info, key=lambda item: len(item[1]))
@@ -246,7 +257,7 @@ class HandlersStructure:
             [
                 # these commands can be used in group chats
                 {'command': ['info'], 'function': self.info},
-                {'command': ['start', 'help'], 'function': self.start},
+                {'command': ['start', 'help'], 'function': self.start, 'chats': [config.gacha_chat]},
                 {'command': ['seen'], 'function': self.users_seen_anime},
                 {'command': ['anime'], 'function': self.show_anime},
                 {'command': ['user_info'], 'function': self.show_user_info},
@@ -259,40 +270,29 @@ class HandlersStructure:
                 {'command': ['future'], 'function': self.show_awaited},
                 # {'command': ['random'], 'function': self.random_choice},
                 {'command': [AnimeSelector.command], 'function': AnimeSelector(di=self.di)},
+                {'command': [AnimeFilter.command], 'function': AnimeFilter(di=self.di)},
                 {'command': ['users'], 'function': self.users_stats},
                 # {'command': ['source'], 'function': self.ask_saucenao},
-                {'message': 'sticker', 'function': self.convert_webp},
-            ],
-            [
-                # redirects non-groupchat commands in group chats to an empty handler
-                {'catcher': config.main_chat, 'function': self.do_nothing},
+                {'message': 'sticker', 'function': self.convert_webp, 'chats': [config.gacha_chat], },
             ],
             [
                 # these handlers can be used in private chats with a bot
-                {'command': ['reg', 'register'], 'function': self.register_user},
-                {'command': ['track'], 'function': self.track_anime},
-                {'command': ['drop'], 'function': self.drop_anime},
-                {'message': 'photo', 'function': self.ask_saucenao},
+                {'command': ['reg', 'register'], 'function': self.register_user, 'private': True},
+                {'command': ['track'], 'function': self.track_anime, 'private': True},
+                {'command': ['drop'], 'function': self.drop_anime, 'private': True},
+                {'message': 'photo', 'function': self.ask_saucenao, 'private': True},
                 # this prevents the bot from replying to a gif with unauthed handler
-                {'message': 'gif', 'function': self.do_nothing},
-            ],
-            [
-                # replies with "access denied" to restricted commands in non-admin chats
-                {'anti_catcher': config.dev_tg_id, 'function': self.unauthed},
+                {'message': 'gif', 'function': self.do_nothing, 'private': True},
             ],
             [
                 # admin-only commands
                 # 'force_deliver': {'command': ['force_deliver'], 'function': self.force_deliver},
-                {'command': ['update_lists'], 'function': self.update_lists},
-                {'command': ['send_last'], 'function': self.deliver_last},
-                {'command': ['prep_waifu_list'], 'function': self.process_waifus},
-                {'command': [Voting.command], 'function': Voting()},
-                {'command': [Nominate.command], 'function': Nominate(self.jikan)},
-                {'command': [VotingUpload.command], 'function': VotingUpload()},
-            ],
-            [
-                # handler for /commands which weren't recognized
-                {'message': 'unknown', 'function': self.unknown}
+                {'command': ['update_lists'], 'function': self.update_lists, 'admin': True},
+                {'command': ['send_last'], 'function': self.deliver_last, 'admin': True},
+                {'command': ['prep_waifu_list'], 'function': self.process_waifus, 'admin': True},
+                {'command': [Voting.command], 'function': Voting(), 'admin': True},
+                {'command': [Nominate.command], 'function': Nominate(self.jikan), 'admin': True},
+                {'command': [VotingUpload.command], 'function': VotingUpload(), 'admin': True},
             ],
             [
                 # handler for inline bot queries
@@ -825,7 +825,8 @@ class HandlersStructure:
         pass
 
     def unknown(self, update, context):
-        context.bot.send_message(chat_id=update.effective_chat.id, text='Sorry, I didn`t understand!')
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='Команда не распознана или предназначена для использования в привате!')
 
     # this is a general error handler function. If you need more information about specific type of update,
     # add it to the payload in the respective if clause
