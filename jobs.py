@@ -1,11 +1,10 @@
 import config
 from telegram import ParseMode
 from telegram.error import BadRequest
-from anime_synonyms import Synonyms
 
 
 class BotJobs:
-    def __init__(self, updater, feed_parser, list_importer, data_interface, synonyms):
+    def __init__(self, updater, feed_parser, list_importer, data_interface):
         """
         Initializes requirements for jobs
 
@@ -21,7 +20,6 @@ class BotJobs:
         self.li = list_importer
         self.updater = updater
         self.di = data_interface
-        self.syn = synonyms
 
     def update_nyaa(self, callback):
         self.feed_parser.check_feeds()
@@ -57,4 +55,3 @@ class BotJobs:
 
     def update_seasons(self):
         self.li.update_seasonal()
-        self.syn.extract_synonyms()
