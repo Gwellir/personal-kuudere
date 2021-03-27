@@ -60,8 +60,10 @@ for category in core.handlers.handlers_list:
                                                   filters=get_handler_filters(handler)),
                                    )
         elif 'message' in handler.keys():
-            dispatcher.add_handler(MessageHandler(filter_type_dict[handler['message']] & get_handler_filters(handler) ,
+            dispatcher.add_handler(MessageHandler(filter_type_dict[handler['message']] & get_handler_filters(handler),
                                                   handler['function']))
+        elif 'regex' in handler.keys():
+            dispatcher.add_handler(MessageHandler(Filters.regex(handler['regex']), handler['function']))
         elif 'inline' in handler.keys():
             dispatcher.add_handler(InlineQueryHandler(handler['function']))
         elif 'callback' in handler.keys():

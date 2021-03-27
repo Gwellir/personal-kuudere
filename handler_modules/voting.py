@@ -1,10 +1,12 @@
 import re
+from collections import defaultdict
 from pprint import pprint
 from time import sleep
 from typing import Tuple
 
 import requests
 from sqlalchemy.exc import IntegrityError
+from telegram import ParseMode
 
 import config
 from .base import Handler
@@ -243,3 +245,28 @@ class VotingUpload(Handler):
 
         err_text = '\n'.join(errors)
         return f'posted everything but:\n\n{err_text}'
+
+
+class ShowCandidates(Handler):
+    command = 'candidates'
+
+    def process(self, params):
+        sess = self.br.get_session()
+        entries = sess.query(VotedCharacters).join(SeasonalVotings).join(Anime)\
+            .filter(SeasonalVotings.is_current == True).all()
+        allowed_entries = defaultdict(list)
+        waifu_counter = len(entries)
+        for char in entries:
+            allowed_entries[char.anime.title].append((char.mal_cid, char.name))
+
+        return waifu_counter, allowed_entries
+
+    def answer(self, result):
+        waifu_counter, allowed_entries = result
+        msg = f'<b>Список внесённых няш сезона ({waifu_counter})</b>:'
+        for anime in [*allowed_entries.keys()]:
+            msg += f'\n\n<b>{anime}</b>\n'
+            msg += '\n'.join([f'<a href="https://myanimelist.net/character/{char[0]}/">{char[1]}</a>'
+                             for char in allowed_entries[anime]])
+        self.bot.send_message(chat_id=self.chat.id, text=msg, parse_mode=ParseMode.HTML,
+                                 disable_web_page_preview=True)

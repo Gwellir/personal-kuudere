@@ -137,7 +137,7 @@ class VotedCharacters(Base):
 
     voting = relationship('SeasonalVotings')
     character = relationship('Characters')
-    # anime = relationship('Anime')
+    anime = relationship('Anime')
 
 
 class Ongoings(Base):

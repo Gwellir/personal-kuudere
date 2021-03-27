@@ -9,7 +9,7 @@ from telegram import (ParseMode, InlineQueryResultCachedMpeg4Gif, InlineKeyboard
 from telegram.utils.helpers import mention_html
 # my classes
 from entity_data import AnimeEntry
-from handler_modules.voting import Voting, Nominate, VotingUpload
+from handler_modules.voting import Voting, Nominate, VotingUpload, ShowCandidates
 from handler_modules.random import AnimeSelector, AnimeFilter
 # service wrappers
 from saucenao import SauceNao
@@ -272,6 +272,7 @@ class HandlersStructure:
                 {'command': [AnimeSelector.command], 'function': AnimeSelector(di=self.di)},
                 {'command': [AnimeFilter.command], 'function': AnimeFilter(di=self.di)},
                 {'command': ['users'], 'function': self.users_stats},
+                {'command': ['candidates'], 'function': ShowCandidates()},
                 # {'command': ['source'], 'function': self.ask_saucenao},
                 {'message': 'sticker', 'function': self.convert_webp, 'chats': [config.gacha_chat], },
             ],
