@@ -1,9 +1,11 @@
-from handlers import UtilityFunctions
-from jikanpy import Jikan, APIException
-from utils.db_wrapper2 import DataInterface
-from orm.ORMWrapper import *
-from time import sleep
 from random import randint, shuffle
+from time import sleep
+
+from jikanpy import APIException, Jikan
+
+from handlers import UtilityFunctions
+from orm.ORMWrapper import *
+from utils.db_wrapper2 import DataInterface
 
 base = BaseRelations()
 ji = Jikan()
@@ -22,14 +24,16 @@ def get_anime_by_ids(ls_ids):
         try:
             uf.get_anime_by_aid(ls_ids[i])
         except APIException:
-            print('FAIL: ', ls_ids[i])
+            print("FAIL: ", ls_ids[i])
         sleep(randint(0, 2))
         if i % 30 == 29:
-            print('got', i, 'titles -', len(ls_ids) - i, 'remaining')
+            print("got", i, "titles -", len(ls_ids) - i, "remaining")
             sleep(randint(60, 120))
 
 
-anime_ids = [e[0] for e in base.session.
-                query(Anime.mal_aid).filter(Anime.popularity == None).all()]
+anime_ids = [
+    e[0]
+    for e in base.session.query(Anime.mal_aid).filter(Anime.popularity == None).all()
+]
 
 get_anime_by_ids(anime_ids)

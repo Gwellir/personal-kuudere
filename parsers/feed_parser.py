@@ -1,28 +1,29 @@
 # todo news and mangadex feeds
 
-import feedparser
 import re
-from colorama import Fore, Style
+from collections import Counter
+from datetime import datetime, timedelta
 from pprint import pprint
 from time import sleep
-from collections import Counter
+
+import feedparser
 import requests
+from colorama import Fore, Style
 from jikanpy import APIException
 from pytz import timezone
-from datetime import datetime, timedelta
 
 from config import jikan_delay
 
-
-CATCH_360 = ['360p']
-CATCH_480 = ['480p', '720x480']
-CATCH_720 = ['720p', '1280x720']
-CATCH_1080 = ['1080p', '1920x1080']
-match_in_square_brackets = re.compile(r'\[(.*?)\]')
-match_in_round_brackets = re.compile(r'\((.*?)\)')
-match_multiple_spaces = re.compile(r'\s+')
-match_extension = re.compile(r'.*\.(\w+)$')
-match_ep_number = re.compile(r'.*((?P<season>S\d+)E|- |episode )(\d+).*')
+CATCH_360 = ["360p"]
+CATCH_480 = ["480p", "720x480"]
+CATCH_540 = ["540p"]
+CATCH_720 = ["720p", "1280x720"]
+CATCH_1080 = ["1080p", "1920x1080"]
+match_in_square_brackets = re.compile(r"\[(.*?)\]")
+match_in_round_brackets = re.compile(r"\((.*?)\)")
+match_multiple_spaces = re.compile(r"\s+")
+match_extension = re.compile(r".*\.(\w+)$")
+match_ep_number = re.compile(r".*((?P<season>S\d+)E|- |episode )(\d+).*")
 
 
 # todo well, this is a piece of shit
@@ -30,11 +31,13 @@ def title_compare(variants, title):
     t = Counter(title.lower())
     # min_sum = sum(t.values())
     for v in variants:
-        c = Counter(v['title'].lower())
-        diff = (t - c) if len(title) > len(v['title']) else (c - t)
-        print(diff, sum(diff.values()), v['title'])
+        if title.lower().startswith(f"{v['title'].lower()} "):
+            return v["mal_id"]
+        c = Counter(v["title"].lower())
+        diff = (t - c) if len(title) > len(v["title"]) else (c - t)
+        print(diff, sum(diff.values()), v["title"])
         if sum(diff.values()) < 5 and sum(diff.values()) < len(title) / 3:
-            return v['mal_id']
+            return v["mal_id"]
     return None
 
 
@@ -74,8 +77,11 @@ def get_resolution_from_tags(tags):
         resolution = 720
     elif [res for res in CATCH_1080 if res in [t.lower() for t in tags]]:
         resolution = 1080
-    elif [res for res in CATCH_480 if res in [t.lower() for t in tags]]\
-            or [res for res in CATCH_360 if res in [t.lower() for t in tags]]:
+    elif (
+        [res for res in CATCH_480 if res in [t.lower() for t in tags]]
+        or [res for res in CATCH_360 if res in [t.lower() for t in tags]]
+        or [res for res in CATCH_540 if res in [t.lower() for t in tags]]
+    ):
         resolution = 480
     return resolution
 
@@ -99,34 +105,40 @@ def parse_feed_title(a_title):
         a_group = tags_in_square[0]
         group_not_found = False
         for match in tags_in_square:
-            all_tags.extend(match.split(' '))
-            a_title = str.replace(a_title, f'[{match}]', '').strip()
+            all_tags.extend(match.split(" "))
+            a_title = str.replace(a_title, f"[{match}]", "").strip()
     tags_in_round = match_in_round_brackets.findall(a_title)
     if tags_in_round:
         if group_not_found:
             a_group = tags_in_round[0]
         for match in tags_in_round:
-            all_tags.extend(match.split(' '))
-            a_title = str.replace(a_title, f'({match})', '').strip()
-    print(f'{Fore.BLUE}{all_tags}{Style.RESET_ALL}')
+            all_tags.extend(match.split(" "))
+            a_title = str.replace(a_title, f"({match})", "").strip()
+    print(f"{Fore.BLUE}{all_tags}{Style.RESET_ALL}")
     a_res = get_resolution_from_tags(all_tags)
     extension = match_extension.match(a_title)
     if extension:
         a_ext = extension.group(1)
-        a_title = str.replace(a_title, f'.{a_ext}', '').strip()
+        a_title = str.replace(a_title, f".{a_ext}", "").strip()
     ep_number = match_ep_number.match(a_title)
     if ep_number:
         a_ep_no = ep_number.group(3)
-        a_title = a_title[:a_title.find(f'{ep_number.group(1)}{ep_number.group(3)}')]
-        if ep_number.group('season'):
-            a_title += ep_number.group('season')
-        a_title = match_multiple_spaces.sub(' ', a_title.strip())
-    return a_ep_no, a_group[:90] if a_group else None, a_title, a_res, a_ext  # fix for group names which are too long
+        a_title = a_title[: a_title.find(f"{ep_number.group(1)}{ep_number.group(3)}")]
+        if ep_number.group("season"):
+            a_title += ep_number.group("season")
+        a_title = match_multiple_spaces.sub(" ", a_title.strip())
+    return (
+        a_ep_no,
+        a_group[:90] if a_group else None,
+        a_title,
+        a_res,
+        a_ext,
+    )  # fix for group names which are too long
 
 
 def get_local_time(dtime):
     dt_utc = datetime(*dtime[0:6])
-    return dt_utc.astimezone(timezone('Europe/Moscow'))
+    return dt_utc.astimezone(timezone("Europe/Moscow"))
 
 
 class TorrentFeedParser:
@@ -136,16 +148,18 @@ class TorrentFeedParser:
 
     <Should be split up and named NyaaFeedParser after logic is changed to support multiple feed sources>
     """
-    MY_FEEDS = ['https://nyaa.si/?page=rss&c=1_2&f=0']
+
+    MY_FEEDS = ["https://nyaa.si/?page=rss&c=1_2&f=2"]
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
     def __init__(self, jikan, di):
         """
         Initializes requirements for feed parser
 
-        :param jikan:
+        :param jikan: Jikan API wrapper instance
+        :type jikan: :class:`jikanpy.Jikan`
         :param di: DataInterface DB connector instance
-        :type di: :class:`db_wrapper2.DataInterface`
+        :type di: :class:`utils.db_wrapper2.DataInterface`
         """
         self.jikan = jikan
         self.di = di
@@ -160,10 +174,16 @@ class TorrentFeedParser:
         :param a_description:
         :return:
         """
-        if not self.di.select_feed_entry_by_title_and_date(a_title, a_date, session).first():
-            self.di.insert_new_feed_entry(a_title, a_date, a_link, a_description, session)
+        if not self.di.select_feed_entry_by_title_and_date(
+            a_title, a_date, session
+        ).first():
+            self.di.insert_new_feed_entry(
+                a_title, a_date, a_link, a_description, session
+            )
         else:
-            self.di.update_anifeeds_entry(a_link, a_description, a_title, a_date, session)
+            self.di.update_anifeeds_entry(
+                a_link, a_description, a_title, a_date, session
+            )
 
     def get_last_entry(self):
         last_entry = self.di.select_last_feed_entry().first()
@@ -182,15 +202,20 @@ class TorrentFeedParser:
         parsed_feed = feedparser.parse(rss_feed)
         last_db_entry = self.get_last_entry()
         d_3h = timedelta(hours=3)  # timezone hacks
-        last_time = (last_db_entry[0] - d_3h).astimezone(timezone('Europe/Moscow'))
+        last_time = (last_db_entry[0] - d_3h).astimezone(timezone("Europe/Moscow"))
         last_title = last_db_entry[1]
         if not last_db_entry:
-            entries = [entry for entry in parsed_feed['entries']]
+            entries = [entry for entry in parsed_feed["entries"]]
         else:
-            entries = [entry for entry in parsed_feed['entries']
-                       if get_local_time(entry.published_parsed) > last_time
-                       or (get_local_time(entry.published_parsed) == last_time
-                           and entry['title'] != last_title)]
+            entries = [
+                entry
+                for entry in parsed_feed["entries"]
+                if get_local_time(entry.published_parsed) > last_time
+                or (
+                    get_local_time(entry.published_parsed) == last_time
+                    and entry["title"] != last_title
+                )
+            ]
         entries.reverse()
         # pprint(entries)
         for article in entries:
@@ -198,8 +223,16 @@ class TorrentFeedParser:
             dt = article.published_parsed
             dt_local = get_local_time(dt)
             dt_repr = str(dt_local + d_3h)[:19]
-            self.add_to_db(article['title'], dt_repr, article['link'], article['description'], session)
-            print(f'{article.title}\n{article.link}\n{article.description}\n{article.published}')
+            self.add_to_db(
+                article["title"],
+                dt_repr,
+                article["link"],
+                article["description"],
+                session,
+            )
+            print(
+                f"{article.title}\n{article.link}\n{article.description}\n{article.published}"
+            )
 
     def check_feeds(self):
         """
@@ -213,7 +246,13 @@ class TorrentFeedParser:
             self.read_article_feed(feed, session)
         release_list = self.di.select_unchecked_feed_entries(session).all()
         for release in release_list:
-            self.do_recognize(release.title, release.date, release.link, parse_size(release.description), session)  # just use a fucking hash as torrent identity
+            self.do_recognize(
+                release.title,
+                release.date,
+                release.link,
+                parse_size(release.description),
+                session,
+            )  # just use a fucking hash as torrent identity
         session.commit()
         session.close()
 
@@ -234,11 +273,17 @@ class TorrentFeedParser:
         save_title = a_title
         a_ep_no, a_group, a_title, a_res, a_ext = parse_feed_title(a_title)
         if a_ep_no and a_group and a_title:
-            print(f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
-                  f' ext ({a_ext if a_ext else "n/a"})')
-            mal_id = self.di.select_ongoing_anime_id_by_synonym(a_title, session).first()
+            print(
+                f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
+                f' ext ({a_ext if a_ext else "n/a"})'
+            )
+            mal_id = self.di.select_ongoing_anime_id_by_synonym(
+                a_title, session
+            ).first()
             if not mal_id:
-                mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title, session).all()
+                mal_ids = self.di.select_mal_anime_ids_by_title_part(
+                    a_title, session
+                ).all()
                 if mal_ids and len(mal_ids) == 1:
                     print(mal_ids[0])
                     mal_id = mal_ids[0]
@@ -247,24 +292,40 @@ class TorrentFeedParser:
                 else:
                     search_results = None
                     try:
-                        search_results = self.jikan.search('anime', a_title, page=1,
-                                                           parameters={'type': 'tv', 'status': 'airing', 'limit': 5,
-                                                                       'genre': 15,
-                                                                       'genre_exclude': 0})
+                        search_results = self.jikan.search(
+                            "anime",
+                            a_title,
+                            page=1,
+                            parameters={
+                                "type": "tv",
+                                "status": "airing",
+                                "limit": 5,
+                                "genre": 15,
+                                "genre_exclude": 0,
+                            },
+                        )
                         # test for legit episode numbers as MAL sometimes returns very strange title matches
-                        mal_ids = [(result['mal_id'],) for result in search_results['results']
-                                   if (result['episodes'] == 0 or result['episodes'] >= int(a_ep_no))]
+                        mal_ids = [
+                            (result["mal_id"],)
+                            for result in search_results["results"]
+                            if (
+                                result["episodes"] == 0
+                                or result["episodes"] >= int(a_ep_no)
+                            )
+                        ]
                     except APIException:
                         pass
                     sleep(jikan_delay)
 
-                # else:
+                    # else:
                     print(f"Can't get a precise result... {mal_ids}")
                     if search_results:
-                        mal_id = title_compare(search_results['results'], a_title)
+                        mal_id = title_compare(search_results["results"], a_title)
                 # check whether we have title info
                 if mal_id:
-                    if not self.di.select_anime_id_is_in_database(mal_id, session).first():
+                    if not self.di.select_anime_id_is_in_database(
+                        mal_id, session
+                    ).first():
                         a_info = self.jikan.anime(mal_id)
                         sleep(jikan_delay)
                         # is sometimes unreachable
@@ -273,12 +334,32 @@ class TorrentFeedParser:
                     self.di.insert_new_synonym(mal_id, a_title)
             else:
                 pass
-            self.di.update_anifeeds_with_parsed_information(mal_id, a_group, a_res, int(a_ep_no), file_size, save_title, a_date, session)
+            self.di.update_anifeeds_with_parsed_information(
+                mal_id,
+                a_group,
+                a_res,
+                int(a_ep_no),
+                file_size,
+                save_title,
+                a_date,
+                session,
+            )
             if mal_id:
-                self.torrent_save(mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size, session)
+                self.torrent_save(
+                    mal_id,
+                    a_group,
+                    a_ep_no,
+                    torrent_link,
+                    a_title,
+                    a_res,
+                    file_size,
+                    session,
+                )
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
-            self.di.update_anifeeds_unrecognized_entry(file_size, save_title, a_date, session)
+            self.di.update_anifeeds_unrecognized_entry(
+                file_size, save_title, a_date, session
+            )
         return
 
     # todo implement actual check for files which failed to download
@@ -297,25 +378,35 @@ class TorrentFeedParser:
         """
         approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id, session).one()
         if approved_ep and int(episode) > approved_ep[0]:
-            print(f'  >>> FAKE {title} - {episode} by {group}')
+            print(f"  >>> FAKE {title} - {episode} by {group}")
             return
         is_downloaded = False
-        title = re.sub(r'[|/\\?:<>]', ' ', title)
+        title = re.sub(r"[|/\\?:<>]", " ", title)
         url = link
         r = requests.get(url)
-        filename = f'torrents/[{group}] {title} - {episode:0>2}' + (f' [{res}p]' if res else '') + f' [{size} MiB].torrent'
-        f = open(filename, 'wb')
+        filename = (
+            f"torrents/[{group}] {title} - {episode:0>2}"
+            + (f" [{res}p]" if res else "")
+            + f" [{size} MiB].torrent"
+        )
+        f = open(filename, "wb")
         if f:
             f.write(r.content)
             is_downloaded = True
             f.close()
-            print(f'Downloaded "{link}" for {title}({mal_id}) ep {episode} from {group}, size - {size}')
+            print(
+                f'Downloaded "{link}" for {title}({mal_id}) ep {episode} from {group}, size - {size}'
+            )
         if is_downloaded:
-            entry_exists = self.di.select_torrent_is_saved_in_database(mal_id, group, episode, res, size, session).first()
+            entry_exists = self.di.select_torrent_is_saved_in_database(
+                mal_id, group, episode, res, size, session
+            ).first()
             if not entry_exists:
-                self.di.insert_new_torrent_file(mal_id, group, episode, filename, res, size, session)
+                self.di.insert_new_torrent_file(
+                    mal_id, group, episode, filename, res, size, session
+                )
             else:
-                print('DUPLICATE ', [mal_id, group, episode, res, size])
+                print("DUPLICATE ", [mal_id, group, episode, res, size])
             return filename
         else:
             return False

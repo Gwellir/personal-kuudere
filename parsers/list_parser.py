@@ -2,22 +2,23 @@
 # get user lists
 # get season lists
 
-from jikanpy import Jikan, exceptions
+from datetime import datetime
 from pprint import pprint
 from time import sleep
-import simplejson
-import config
-import requests
-from datetime import datetime
 
-from utils.anime_synonyms import Synonyms
-from utils.db_wrapper2 import DataInterface, BaseRelations
+import requests
+import simplejson
+from jikanpy import Jikan, exceptions
+
+import config
 from entity_data import AnimeEntry
+from utils.anime_synonyms import Synonyms
+from utils.db_wrapper2 import BaseRelations, DataInterface
 
 PAGE_SIZE = 300
 API_ERROR_LIMIT = 20
-AL_URL = 'https://graphql.anilist.co'
-AL_USER_QUERY = '''
+AL_URL = "https://graphql.anilist.co"
+AL_USER_QUERY = """
 query ($name: String) { # Define which variables will be used in the query (id)
   User (search: $name) { # Insert our variables into the query arguments (id) (type: ANIME is hard-coded in the query)
     id
@@ -25,8 +26,8 @@ query ($name: String) { # Define which variables will be used in the query (id)
     about
   }
 }
-'''
-AL_LIST_QUERY = '''
+"""
+AL_LIST_QUERY = """
 query ($username: String, $page: Int, $perPage: Int) {
     Page (page: $page, perPage: $perPage) {
         pageInfo {
@@ -51,21 +52,21 @@ query ($username: String, $page: Int, $perPage: Int) {
         }
     }
 }
-'''
-MONTH_TO_SEASON_DICT = {
-    0: 'fall',
-    1: 'winter',
-    2: 'winter',
-    3: 'winter',
-    4: 'spring',
-    5: 'spring',
-    6: 'spring',
-    7: 'summer',
-    8: 'summer',
-    9: 'summer',
-    10: 'fall',
-    11: 'fall',
-    12: 'fall',
+"""
+MONTH_TO_SEASON = {
+    0: "fall",
+    1: "winter",
+    2: "winter",
+    3: "winter",
+    4: "spring",
+    5: "spring",
+    6: "spring",
+    7: "summer",
+    8: "summer",
+    9: "summer",
+    10: "fall",
+    11: "fall",
+    12: "fall",
 }
 
 
@@ -97,45 +98,56 @@ class ListImporter:
             sa = self.jikan.season_later()
         elif shift != 0:
             shifted_month = datetime.now().month + shift * 3
-            season = MONTH_TO_SEASON_DICT[(12 + shifted_month % 12) % 12]
+            season = MONTH_TO_SEASON[(12 + shifted_month % 12) % 12]
             year = datetime.now().year + (shifted_month - 1) // 12
             sa = self.jikan.season(year=year, season=season)
         elif not y and not s:
-            sa = self.jikan.season(year=datetime.now().year,
-                                   season=MONTH_TO_SEASON_DICT[datetime.now().month])          
+            sa = self.jikan.season(
+                year=datetime.now().year, season=MONTH_TO_SEASON[datetime.now().month]
+            )
         else:
             sa = self.jikan.season(year=y, season=s)
-        sa_fs = sa['anime']
+        sa_fs = sa["anime"]
         print(len(sa_fs))
         for item in sa_fs:
-            print(f"{item['mal_id']:>5}", item['airing_start'][:10] if item['airing_start'] else None, item['type'],
-                  item['score'], item['title'], )
+            print(
+                f"{item['mal_id']:>5}",
+                item["airing_start"][:10] if item["airing_start"] else None,
+                item["type"],
+                item["score"],
+                item["title"],
+            )
         return sa_fs
 
     def format_anilist_response(self, answer):
-        page_info = answer['data']['Page']['mediaList']
+        page_info = answer["data"]["Page"]["mediaList"]
         airing_status_dict = {
-            'FINISHED': 2,
-            'RELEASING': 1,
-            'NOT_YET_RELEASED': 3,
+            "FINISHED": 2,
+            "RELEASING": 1,
+            "NOT_YET_RELEASED": 3,
         }
         user_status_dict = {
-            'CURRENT': 1,
-            'COMPLETED': 2,
-            'PAUSED': 3,
-            'DROPPED': 4,
-            'PLANNING': 6,
+            "CURRENT": 1,
+            "COMPLETED": 2,
+            "PAUSED": 3,
+            "DROPPED": 4,
+            "PLANNING": 6,
         }
-        mal_adapted = [{
-            'mal_id': item['media']['idMal'],
-            'title': item['media']['title']['romaji'],
-            'type': item['media']['format'] if item['media']['format'] != 'TV_SHORT' else 'TV',
-            'watching_status': user_status_dict[item['status']],
-            'watched_episodes': item['progress'],
-            'total_episodes': item['media']['episodes'],
-            'score': item['score'],
-            'airing_status': airing_status_dict[item['media']['status']],
-        } for item in page_info]
+        mal_adapted = [
+            {
+                "mal_id": item["media"]["idMal"],
+                "title": item["media"]["title"]["romaji"],
+                "type": item["media"]["format"]
+                if item["media"]["format"] != "TV_SHORT"
+                else "TV",
+                "watching_status": user_status_dict[item["status"]],
+                "watched_episodes": item["progress"],
+                "total_episodes": item["media"]["episodes"],
+                "score": item["score"],
+                "airing_status": airing_status_dict[item["media"]["status"]],
+            }
+            for item in page_info
+        ]
         return mal_adapted
 
     def get_animelist_anilist(self, user):
@@ -147,17 +159,19 @@ class ListImporter:
         if not answer:
             while err_count < API_ERROR_LIMIT:
                 variables = {
-                    'username': user,
-                    'page': curr_page,
-                    'perPage': 50,
+                    "username": user,
+                    "page": curr_page,
+                    "perPage": 50,
                 }
                 try:
-                    response = requests.post(AL_URL, json={'query': AL_LIST_QUERY, 'variables': variables})
+                    response = requests.post(
+                        AL_URL, json={"query": AL_LIST_QUERY, "variables": variables}
+                    )
                     answer = response.json()
                     sleep(1)
                     print(curr_page, err_count)
                     anime_list += self.format_anilist_response(answer)
-                    has_next = answer['data']['Page']['pageInfo']['hasNextPage']
+                    has_next = answer["data"]["Page"]["pageInfo"]["hasNextPage"]
                     err_count = 0
                 except simplejson.errors.JSONDecodeError:
                     answer = {}
@@ -171,27 +185,30 @@ class ListImporter:
                     break
             if err_count == API_ERROR_LIMIT:
                 anime_list = []
-        print(len(anime_list), 'items received.')
+        print(len(anime_list), "items received.")
         return anime_list
 
     def get_animelist_mal(self, user):
-        length = user['anime_stats']['total_entries']
-        print(user['username'], length)
+        length = user["anime_stats"]["total_entries"]
+        print(user["username"], length)
         # answer = user_list_load(user)
         answer = None
         curr_page = 0
         anime_list = []
         err_count = 0
         if not answer:
-            while curr_page < length/PAGE_SIZE and err_count <= API_ERROR_LIMIT:
+            while curr_page < length / PAGE_SIZE and err_count <= API_ERROR_LIMIT:
                 try:
-                    answer = self.jikan.user(username=user['username'], request='animelist', argument='all',
-                                             page=curr_page + 1,
-                                             # parameters={'sort': 'descending', 'order_by': 'score'}
-                                             )
+                    answer = self.jikan.user(
+                        username=user["username"],
+                        request="animelist",
+                        argument="all",
+                        page=curr_page + 1,
+                        # parameters={'sort': 'descending', 'order_by': 'score'}
+                    )
                     sleep(config.jikan_delay)
                     print(curr_page, err_count)
-                    anime_list += answer['anime']
+                    anime_list += answer["anime"]
                     err_count = 0
                 except simplejson.errors.JSONDecodeError:
                     answer = {}
@@ -200,7 +217,9 @@ class ListImporter:
                 except exceptions.APIException:
                     err_count += 1
                     wait_s = config.jikan_delay * err_count
-                    print(f'MAL inaccessible x{err_count}: waiting for {wait_s} seconds...')
+                    print(
+                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
+                    )
                     sleep(wait_s)
                     continue
                 curr_page += 1
@@ -209,18 +228,18 @@ class ListImporter:
         test_set = set()
         checked_list = []
         for item in anime_list:
-            if item['mal_id'] not in test_set:
-                test_set.add(item['mal_id'])
+            if item["mal_id"] not in test_set:
+                test_set.add(item["mal_id"])
                 checked_list.append(item)
             else:
-                print(item['title'], item['mal_id'])
+                print(item["title"], item["mal_id"])
         #     print(f"{item['mal_id']:<5} {item['type']:<5} {item['score']:>2} {item['title']}")
-        print(len(anime_list), 'items received.')
+        print(len(anime_list), "items received.")
         return checked_list
 
     def update_mal_list_status(self, nick=None):
         if not nick:
-            userlist_mal = self.di.select_service_users_ids('MAL').all()
+            userlist_mal = self.di.select_service_users_ids("MAL").all()
         else:
             userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
@@ -236,31 +255,37 @@ class ListImporter:
                 except exceptions.APIException:
                     err_count += 1
                     wait_s = config.jikan_delay * err_count
-                    print(f'MAL inaccessible x{err_count}: waiting for {wait_s} seconds...')
+                    print(
+                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
+                    )
                     sleep(wait_s)
                     continue
-            print(user['username'], '-> got profile data')
+            print(user["username"], "-> got profile data")
             if not user_entry[1]:
-                self.di.update_users_service_id_for_service_nick(user['user_id'], user['username'])
+                self.di.update_users_service_id_for_service_nick(
+                    user["user_id"], user["username"]
+                )
             alist = self.get_animelist_mal(user)
-            have_user = self.di.select_user_is_in_list_status(user['user_id']).first()
+            have_user = self.di.select_user_is_in_list_status(user["user_id"]).first()
             if alist and have_user:
-                self.di.delete_list_by_user_id(user['user_id'])
+                self.di.delete_list_by_user_id(user["user_id"])
             elif not alist:
                 return False
-            self.di.insert_new_animelist(user['user_id'], alist)
+            self.di.insert_new_animelist(user["user_id"], alist)
 
     def update_ani_list_status(self):
-        userlist_ani = self.di.select_service_users_ids('Anilist').all()
+        userlist_ani = self.di.select_service_users_ids("Anilist").all()
         for user_entry in userlist_ani:
-            print(user_entry[0], '-> got profile data')
+            print(user_entry[0], "-> got profile data")
             if not user_entry[1]:
                 variables = {
-                    'name': user_entry[0],
+                    "name": user_entry[0],
                 }
-                response = requests.post(AL_URL, json={'query': AL_USER_QUERY, 'variables': variables})
+                response = requests.post(
+                    AL_URL, json={"query": AL_USER_QUERY, "variables": variables}
+                )
                 answer = response.json()
-                user_id = answer['data']['User']['id']
+                user_id = answer["data"]["User"]["id"]
                 print(user_id)
                 sleep(config.jikan_delay)
                 self.di.update_users_service_id_for_service_nick(user_id, user_entry[1])
@@ -294,22 +319,29 @@ class ListImporter:
         self.synonyms.extract_synonyms()
 
     def has_changed(self, anime, session):
-        stored_entry = self.di.select_anime_by_id(anime['mal_id'], sess=session).first()
+        stored_entry = self.di.select_anime_by_id(anime["mal_id"], sess=session).first()
         # pprint(stored_entry)
         # print(anime['airing_start'][:10])
         # print(str(stored_entry.started_at)[:10])
         # return False
         if not stored_entry:
             return True
-        elif anime['title'] != stored_entry.title\
-                or anime['synopsis'] != stored_entry.synopsis\
-                or anime['type'] != stored_entry.show_type\
-                or (anime['airing_start']
-                    and (not stored_entry.started_at or anime['airing_start'][:10] != str(stored_entry.started_at)[:10]))\
-                or anime['episodes'] != stored_entry.eps\
-                or anime['score'] != stored_entry.score\
-                or stored_entry.status == 'Currently Airing'\
-                or stored_entry.status == 'Not yet aired':
+        elif (
+            anime["title"] != stored_entry.title
+            or anime["synopsis"] != stored_entry.synopsis
+            or anime["type"] != stored_entry.show_type
+            or (
+                anime["airing_start"]
+                and (
+                    not stored_entry.started_at
+                    or anime["airing_start"][:10] != str(stored_entry.started_at)[:10]
+                )
+            )
+            or anime["episodes"] != stored_entry.eps
+            or anime["score"] != stored_entry.score
+            or stored_entry.status == "Currently Airing"
+            or stored_entry.status == "Not yet aired"
+        ):
             return True
         else:
             return False
@@ -322,34 +354,51 @@ class ListImporter:
         session = self.di.br.get_session()
         for anime in anime_list:
             print(f'> {anime["title"]}')
-            if anime['genres']:
-                new_genres = [genre for genre in anime['genres'] if genre['mal_id'] not in genre_list]
+            if anime["genres"]:
+                new_genres = [
+                    genre
+                    for genre in anime["genres"]
+                    if genre["mal_id"] not in genre_list
+                ]
                 self.di.insert_new_genres(new_genres, session)
-                genre_list.extend([genre['mal_id'] for genre in new_genres])
-            if anime['licensors']:
-                new_licensors = [licensor for licensor in anime['licensors'] if licensor.lower() not in licensor_list]
+                genre_list.extend([genre["mal_id"] for genre in new_genres])
+            if anime["licensors"]:
+                new_licensors = [
+                    licensor
+                    for licensor in anime["licensors"]
+                    if licensor.lower() not in licensor_list
+                ]
                 print(new_licensors)
                 self.di.insert_new_licensors(new_licensors, session)
-                licensor_list.extend([licensor['name'] for licensor in new_licensors])
-            if anime['producers']:
-                new_producers = [producer for producer in anime['producers'] if producer['mal_id'] not in producer_list]
+                licensor_list.extend([licensor["name"] for licensor in new_licensors])
+            if anime["producers"]:
+                new_producers = [
+                    producer
+                    for producer in anime["producers"]
+                    if producer["mal_id"] not in producer_list
+                ]
                 print(new_producers)
                 self.di.insert_new_producers(new_producers, session)
-                producer_list.extend([producer['mal_id'] for producer in new_producers])
+                producer_list.extend([producer["mal_id"] for producer in new_producers])
             # if not ani_db.select('mal_aid', 'anime', f"mal_aid = %s", [anime['mal_id']]):
             if self.has_changed(anime, session):
                 remote_entry = None
                 err_count = 0
                 while not remote_entry and err_count <= API_ERROR_LIMIT:
                     try:
-                        remote_entry = self.jikan.anime(anime['mal_id'])
+                        remote_entry = self.jikan.anime(anime["mal_id"])
                         sleep(config.jikan_delay)
                     except simplejson.errors.JSONDecodeError:
                         break
-                    except (exceptions.APIException, requests.exceptions.ChunkedEncodingError):
+                    except (
+                        exceptions.APIException,
+                        requests.exceptions.ChunkedEncodingError,
+                    ):
                         err_count += 1
                         wait_s = config.jikan_delay * err_count
-                        print(f'MAL inaccessible x{err_count}: waiting for {wait_s} seconds...')
+                        print(
+                            f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
+                        )
                         sleep(wait_s)
                         continue
                 # sleep(config.jikan_delay)
@@ -365,9 +414,9 @@ class ListImporter:
         session.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     li = ListImporter(None, None, None, autistic=True)
-    li.update_mal_list_status('DrumBox')
+    li.update_mal_list_status("DrumBox")
     # li.update_all()
     # li.get_anime_season_mal()
     # li.update_seasonal()

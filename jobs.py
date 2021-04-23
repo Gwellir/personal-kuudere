@@ -1,6 +1,7 @@
-import config
 from telegram import ParseMode
 from telegram.error import BadRequest
+
+import config
 
 
 class BotJobs:
@@ -27,12 +28,18 @@ class BotJobs:
 
     def show_daily_events(self, callback):
         today_titles = self.di.select_today_titles().all()
-        daily_list = [f'<a href="https://myanimelist.net/anime/{e[2]}">{e[0]}</a> (<i>{e[1]}</i>)'
-                      for e in today_titles]
+        daily_list = [
+            f'<a href="https://myanimelist.net/anime/{e[2]}">{e[0]}</a> (<i>{e[1]}</i>)'
+            for e in today_titles
+        ]
         if daily_list:
-            msg = '#digest\nСегодня ожидаются серии:\n\n' + '\n'.join(daily_list)
-            self.updater.bot.send_message(chat_id=config.main_chat, text=msg, parse_mode=ParseMode.HTML,
-                                          disable_web_page_preview=True)
+            msg = "#digest\nСегодня ожидаются серии:\n\n" + "\n".join(daily_list)
+            self.updater.bot.send_message(
+                chat_id=config.main_chat,
+                text=msg,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
 
     def update_lists(self, callback):
         self.li.update_all()
@@ -43,15 +50,22 @@ class BotJobs:
         entries = self.di.select_titles_pending_for_delivery().all()
         for entry in entries:
             try:
-                file = open(entry[1], 'rb')
-                self.updater.bot.send_document(chat_id=entry[0], document=file,
-                                               caption=entry[1].rsplit('/', 1)[1])
-                self.di.update_release_status_for_user_after_delivery(entry[2], entry[4], entry[3], entry[5])
+                file = open(entry[1], "rb")
+                self.updater.bot.send_document(
+                    chat_id=entry[0], document=file, caption=entry[1].rsplit("/", 1)[1]
+                )
+                self.di.update_release_status_for_user_after_delivery(
+                    entry[2], entry[4], entry[3], entry[5]
+                )
             except FileNotFoundError:
                 # todo add redownload logic
-                self.updater.bot.send_message(chat_id=entry[0], text=f"NOT FOUND:\n{entry[1].rsplit('/', 1)[1]}")
+                self.updater.bot.send_message(
+                    chat_id=entry[0], text=f"NOT FOUND:\n{entry[1].rsplit('/', 1)[1]}"
+                )
             except BadRequest:
-                self.updater.bot.send_message(chat_id=config.dev_tg_id, text=f"USER NOT BOUND:\n{entry[0]}")
+                self.updater.bot.send_message(
+                    chat_id=config.dev_tg_id, text=f"USER NOT BOUND:\n{entry[0]}"
+                )
 
     def update_seasons(self, callback):
         self.li.update_seasonal()

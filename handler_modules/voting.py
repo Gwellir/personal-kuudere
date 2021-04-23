@@ -9,8 +9,9 @@ from sqlalchemy.exc import IntegrityError
 from telegram import ParseMode
 
 import config
+from orm.ORMWrapper import Anime, Characters, SeasonalVotings, Users, VotedCharacters
+
 from .base import Handler
-from orm.ORMWrapper import Users, Characters, SeasonalVotings, Anime, VotedCharacters
 
 
 class VotingCompletedError(Exception):
@@ -25,23 +26,29 @@ class NoLegitAnimeError(Exception):
     pass
 
 
+class AlreadyReleasedError(Exception):
+    pass
+
+
 class MalformedABParamsError(Exception):
     pass
 
 
 class Voting(Handler):
-    command = 'voting'
+    command = "voting"
 
     def _find_season(self, season_str):
         session = self.br.get_session()
-        have_season = session.query(Anime.premiered).filter_by(premiered=season_str).first()
+        have_season = (
+            session.query(Anime.premiered).filter_by(premiered=season_str).first()
+        )
         session.close()
         if have_season:
             return True
         return False
 
     def _is_season(self, season_str):
-        if not re.findall(r'(winter|spring|summer|fall) (20\d{2})', season_str):
+        if not re.findall(r"(winter|spring|summer|fall) (20\d{2})", season_str):
             return False
         if not self._find_season(season_str):
             return False
@@ -67,9 +74,9 @@ class Voting(Handler):
 
     def parse(self, args):
         pprint(args)
-        if args == ['stop']:
+        if args == ["stop"]:
             pass
-        elif args == ['restart']:
+        elif args == ["restart"]:
             pass
         return args
 
@@ -85,16 +92,18 @@ class Voting(Handler):
 
 
 class Nominate(Handler):
-    command = 'nominate'
+    command = "nominate"
 
     def __init__(self, jikan):
         super().__init__()
         self.jikan = jikan
         self._force = False
+        # self.entered = []
 
     def _get_voting(self):
         session = self.br.get_session()
         result = session.query(SeasonalVotings).filter_by(is_current=True).first()
+        # self.entered = session.query(VotedCharacters).filter_by(vid=result.id).all()
         session.close()
         return result
 
@@ -105,13 +114,31 @@ class Nominate(Handler):
         if not char:
             raise CharIDNotFoundError
         if self._force:
-            sources = sorted([anime for anime in char.anime], key=lambda item: item.popularity, reverse=True)
+            sources = sorted(
+                [anime for anime in char.anime],
+                key=lambda item: item.popularity,
+                reverse=True,
+            )
             source = sources[0] if sources else None
         else:
-            legit_sources = [anime for anime in char.anime
-                             if anime.premiered and anime.premiered.lower() == voting.season]
+            legit_sources = [
+                anime
+                for anime in char.anime
+                if anime.premiered and anime.premiered.lower() == voting.season
+            ]
+            # todo OVAs can have no PREMIERED parameter
+            blocker_sources = [
+                anime
+                for anime in char.anime
+                if anime.premiered
+                and anime.premiered.lower() != voting.season
+                and anime.show_type in ["TV", "OVA", "ONA"]
+                and anime.eps > 3
+            ]
             if not legit_sources:
                 raise NoLegitAnimeError
+            if blocker_sources:
+                raise AlreadyReleasedError
             legit_sources.sort(key=lambda item: item.popularity, reverse=True)
             source = legit_sources[0]
         session.close()
@@ -120,8 +147,8 @@ class Nominate(Handler):
 
     def _parse_entry(self, entry, voting):
         cid = name = source = image_url = None
-        str_list = entry.split('\n')
-        has_cid = re.match(r'https://myanimelist\.net/character/(\d+).*', str_list[0])
+        str_list = entry.split("\n")
+        has_cid = re.match(r"https://myanimelist\.net/character/(\d+).*", str_list[0])
         if not has_cid:
             if len(str_list) == 3:
                 name, source_title, image_url = tuple(str_list)
@@ -134,31 +161,31 @@ class Nominate(Handler):
             cid = int(has_cid.group(1))
             try:
                 name, source, image_url = self._get_char_stats(cid, voting)
-            except (CharIDNotFoundError, NoLegitAnimeError):
+            except (CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError):
                 return None
             if len(str_list) == 2:
-                if re.findall(r'^https?://', str_list[1]):
+                if re.findall(r"^https?://", str_list[1]):
                     image_url = str_list[1]
         if not (cid or name) or not source:
             return None
         candidate = {
-            'vid': voting.id,
-            'mal_cid': cid,
-            'name': name,
-            'image_url': image_url,
-            'title': source.title,
-            'mal_aid': source.mal_aid,
+            "vid": voting.id,
+            "mal_cid": cid,
+            "name": name,
+            "image_url": image_url,
+            "title": source.title,
+            "mal_aid": source.mal_aid,
             # 'anime': source,
         }
 
         return candidate
 
     def parse(self, args):
-        if args[0] == 'force':
+        if args[0] == "force":
             self._force = True
         voting = self._get_voting()
-        message = '\n'.join(self.message.text.split('\n')[1:])
-        entries = message.split('\n\n')
+        message = "\n".join(self.message.text.split("\n")[1:])
+        entries = message.split("\n\n")
         candidates = []
         unrecognized = []
         for entry in entries:
@@ -168,35 +195,42 @@ class Nominate(Handler):
             else:
                 unrecognized.append(entry)
 
-        return [candidates, unrecognized]
+        return candidates, unrecognized
 
     def process(self, params):
-        candidates, unrecognized = tuple(params)
+        candidates, unrecognized = params
         session = self.br.get_session()
+        duplicates = []
         for candidate in candidates:
             entry = VotedCharacters(**candidate)
             session.add(entry)
-
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                duplicates.append(candidate)
 
         session.close()
+        candidates = [entry for entry in candidates if entry not in duplicates]
 
-        return candidates, unrecognized
+        return candidates, unrecognized, duplicates
 
     def answer(self, result):
-        candidates, unrecognized = result
+        candidates, unrecognized, duplicates = result
 
-        approved = '\n'.join([f'{char["name"]} - {char["title"]} - {char["image_url"]}' for char in candidates])
+        approved = "\n".join(
+            [
+                f'{char["name"]} - {char["title"]} - {char["image_url"]}'
+                for char in candidates
+            ]
+        )
 
-        text = f'{approved}\n\nUNKNOWN:\n{unrecognized}'
+        text = f"{approved}\n\nUNKNOWN:\n{unrecognized}\n\nDOUBLES:\n{duplicates}"
         self.bot.send_message(chat_id=self.chat.id, text=text)
 
 
 class VotingUpload(Handler):
-    command = 'voting_upload'
+    command = "voting_upload"
 
     def parse(self, args):
         id_str, ab_sess, _auth = tuple(args)
@@ -209,31 +243,36 @@ class VotingUpload(Handler):
     def process(self, params):
         bracket_id, ab_sess, _auth = params
         session = self.br.get_session()
-        candidates = list(session.query(VotedCharacters).filter_by(is_posted=False).all())
+        candidates = list(
+            session.query(VotedCharacters).filter_by(is_posted=False).all()
+        )
         errors = []
         if candidates:
-            url = 'https://animebracket.com/submit/'
+            url = "https://animebracket.com/submit/"
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 OPR/73.0.3856.284'
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 OPR/73.0.3856.284"
             }
             cookies = {
-                'AB_SESS': ab_sess,
+                "AB_SESS": ab_sess,
             }
-            params = {
-                'action': 'nominate'
-            }
+            params = {"action": "nominate"}
             for entry in candidates:
                 data = {
-                    'nomineeName': entry.name,
-                    'nomineeSource': entry.title,
-                    'image': entry.image_url,
-                    'bracketId': bracket_id,
-                    '_auth': _auth,
+                    "nomineeName": entry.name,
+                    "nomineeSource": entry.title,
+                    "image": entry.image_url,
+                    "bracketId": bracket_id,
+                    "_auth": _auth,
                 }
-                q = requests.post(url, cookies=cookies, headers=headers, data=data, params=params)
+                q = requests.post(
+                    url, cookies=cookies, headers=headers, data=data, params=params
+                )
                 if q.text == '{"success":true}':
                     entry.is_posted = True
-                elif q.text == '{"success":false,"message":"You\'re doing that too fast!"}':
+                elif (
+                    q.text
+                    == '{"success":false,"message":"You\'re doing that too fast!"}'
+                ):
                     sleep(2)
                     candidates.append(entry)
                 else:
@@ -243,30 +282,46 @@ class VotingUpload(Handler):
 
         session.close()
 
-        err_text = '\n'.join(errors)
-        return f'posted everything but:\n\n{err_text}'
+        err_text = "\n".join(errors)
+        return f"posted everything but:\n\n{err_text}"
 
 
 class ShowCandidates(Handler):
-    command = 'candidates'
+    command = "candidates"
 
     def process(self, params):
         sess = self.br.get_session()
-        entries = sess.query(VotedCharacters).join(SeasonalVotings).join(Anime)\
-            .filter(SeasonalVotings.is_current == True).all()
+        entries = (
+            sess.query(VotedCharacters)
+            .join(SeasonalVotings)
+            .join(Anime)
+            .filter(SeasonalVotings.is_current == True)
+            .all()
+        )
         allowed_entries = defaultdict(list)
         waifu_counter = len(entries)
         for char in entries:
-            allowed_entries[char.anime.title].append((char.mal_cid, char.name))
+            allowed_entries[char.anime.title].append(
+                (char.mal_cid, char.name, char.image_url)
+            )
 
         return waifu_counter, allowed_entries
 
     def answer(self, result):
         waifu_counter, allowed_entries = result
-        msg = f'<b>Список внесённых няш сезона ({waifu_counter})</b>:'
+        msg = f"<b>Список внесённых няш сезона ({waifu_counter})</b>:"
         for anime in [*allowed_entries.keys()]:
-            msg += f'\n\n<b>{anime}</b>\n'
-            msg += '\n'.join([f'<a href="https://myanimelist.net/character/{char[0]}/">{char[1]}</a>'
-                             for char in allowed_entries[anime]])
-        self.bot.send_message(chat_id=self.chat.id, text=msg, parse_mode=ParseMode.HTML,
-                                 disable_web_page_preview=True)
+            msg += f"\n\n<b>{anime}</b>"
+            for char in allowed_entries[anime]:
+                link = (
+                    f"https://myanimelist.net/character/{char[0]}/"
+                    if char[0]
+                    else char[2]
+                )
+                msg += f'\n<a href="{link}">{char[1]}</a>'
+        self.bot.send_message(
+            chat_id=self.chat.id,
+            text=msg,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )

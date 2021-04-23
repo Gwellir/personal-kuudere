@@ -1,7 +1,7 @@
 from unittest import TestCase
+
 from handler_modules.users_stats import UsersStats
 from orm.ORMWrapper import BaseRelations
-
 
 br = BaseRelations()
 us = UsersStats(br)
@@ -9,9 +9,11 @@ us = UsersStats(br)
 
 class TestUsersStats(TestCase):
     def test_process(self):
-        res = us.process(['season'])
+        res = us.process(["season"])
         print(res)
-        self.assertEqual(res, '''Активные пользователи:
+        self.assertEqual(
+            res,
+            """Активные пользователи:
 DarkElve
 Valion
 Jim_Di
@@ -23,10 +25,13 @@ amauros
 unambo
 deltax_msc
 Stalok
-Serusha''')
+Serusha""",
+        )
         res = us.process([])
         print(res)
-        self.assertEqual(res, '''Список пользователей:
+        self.assertEqual(
+            res,
+            """Список пользователей:
 DarkElve - DarkElve
 rune_s - Rune_Sa_Riik
 Valion - Valion
@@ -54,6 +59,5 @@ unambo - unambo
 Otakon273 - Otakon273
 Lacki23 - Lacki23
 Serusha - Serusha
-Stalok - Stalok''')
-
-
+Stalok - Stalok""",
+        )

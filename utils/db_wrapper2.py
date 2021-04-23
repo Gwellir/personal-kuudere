@@ -1,26 +1,28 @@
 import re
+from datetime import datetime, timedelta
+from pprint import pprint
+
+from sqlalchemy import and_, desc, func, or_
 
 from orm.ORMWrapper import *
-from pprint import pprint
-from sqlalchemy import func, desc, or_, and_
-from datetime import datetime, timedelta
 
-
-TYPE_LIST = ['TV', 'ONA']
+TYPE_LIST = ["TV", "ONA"]
 
 
 class DataInterface:
-    
     def __init__(self, br: BaseRelations):
         self.br = br
-    
+
     # @staticmethod
     def select_group_list_for_user(self, mal_aid, user_id):
         session = self.br.get_session()
-        result = session.query(AniFeeds).\
-            join(Users, AniFeeds.resolution == Users.preferred_res).\
-            filter(AniFeeds.mal_aid == mal_aid, Users.id == user_id).\
-            with_entities(AniFeeds.a_group, Users.preferred_res).distinct()
+        result = (
+            session.query(AniFeeds)
+            .join(Users, AniFeeds.resolution == Users.preferred_res)
+            .filter(AniFeeds.mal_aid == mal_aid, Users.id == user_id)
+            .with_entities(AniFeeds.a_group, Users.preferred_res)
+            .distinct()
+        )
         session.close()
         return result
 
@@ -39,14 +41,20 @@ class DataInterface:
     # @staticmethod
     def select_info_post_from_quotes(self):
         session = self.br.get_session()
-        result = session.query(Quotes).filter(Quotes.keyword == 'info').order_by(Quotes.id).\
-            with_entities(Quotes.content, Quotes.markdown)
+        result = (
+            session.query(Quotes)
+            .filter(Quotes.keyword == "info")
+            .order_by(Quotes.id)
+            .with_entities(Quotes.content, Quotes.markdown)
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_user_tg_ids(self,):
+    def select_user_tg_ids(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(Users.tg_id).filter(Users.tg_id != None)
         session.close()
@@ -56,9 +64,16 @@ class DataInterface:
     # @staticmethod
     def select_ptw_list_by_user_tg_id(self, user_tg_id):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id).\
-            filter(Users.tg_id == user_tg_id, ListStatus.status == 6, ListStatus.airing != 3).\
-            with_entities(ListStatus.title, ListStatus.mal_aid)
+        result = (
+            session.query(ListStatus)
+            .join(Users, Users.mal_uid == ListStatus.user_id)
+            .filter(
+                Users.tg_id == user_tg_id,
+                ListStatus.status == 6,
+                ListStatus.airing != 3,
+            )
+            .with_entities(ListStatus.title, ListStatus.mal_aid)
+        )
         session.close()
 
         return result
@@ -66,30 +81,56 @@ class DataInterface:
     # @staticmethod
     def select_ptw_lists_by_usernames(self, nick_list):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id). \
-            filter(Users.mal_nick.in_(nick_list)).filter(ListStatus.status == 6, ListStatus.airing != 3). \
-            with_entities(ListStatus.title, ListStatus.mal_aid, Users.mal_nick, ListStatus.show_type)
+        result = (
+            session.query(ListStatus)
+            .join(Users, Users.mal_uid == ListStatus.user_id)
+            .filter(Users.mal_nick.in_(nick_list))
+            .filter(ListStatus.status == 6, ListStatus.airing != 3)
+            .with_entities(
+                ListStatus.title,
+                ListStatus.mal_aid,
+                Users.mal_nick,
+                ListStatus.show_type,
+            )
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_registered_user_nicks(self, ):
+    def select_registered_user_nicks(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Users).filter(Users.mal_nick != None).with_entities(Users.mal_nick)
+        result = (
+            session.query(Users)
+            .filter(Users.mal_nick != None)
+            .with_entities(Users.mal_nick)
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_watched_titles_in_score_interval(self, score_low, score_high, ignored_users):
+    def select_watched_titles_in_score_interval(
+        self, score_low, score_high, ignored_users
+    ):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, ListStatus.user_id == Users.mal_uid).\
-            filter(ListStatus.status == 2).\
-            filter(ListStatus.score >= score_low).filter(ListStatus.score <= score_high).\
-            filter(Users.mal_uid.notin_(ignored_users)).\
-            with_entities(ListStatus.title, ListStatus.mal_aid, Users.mal_nick, ListStatus.show_type).\
-            distinct()
+        result = (
+            session.query(ListStatus)
+            .join(Users, ListStatus.user_id == Users.mal_uid)
+            .filter(ListStatus.status == 2)
+            .filter(ListStatus.score >= score_low)
+            .filter(ListStatus.score <= score_high)
+            .filter(Users.mal_uid.notin_(ignored_users))
+            .with_entities(
+                ListStatus.title,
+                ListStatus.mal_aid,
+                Users.mal_nick,
+                ListStatus.show_type,
+            )
+            .distinct()
+        )
         session.close()
 
         return result
@@ -97,9 +138,13 @@ class DataInterface:
     # @staticmethod
     def select_watched_list_by_user_tg_id(self, user_tg_id):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, ListStatus.user_id == Users.mal_uid).\
-            filter(Users.tg_id == user_tg_id).filter(ListStatus.status != 6).\
-            with_entities(ListStatus.mal_aid)
+        result = (
+            session.query(ListStatus)
+            .join(Users, ListStatus.user_id == Users.mal_uid)
+            .filter(Users.tg_id == user_tg_id)
+            .filter(ListStatus.status != 6)
+            .with_entities(ListStatus.mal_aid)
+        )
         session.close()
 
         return result
@@ -107,8 +152,11 @@ class DataInterface:
     # @staticmethod
     def select_quotes_by_keyword(self, keyword):
         session = self.br.get_session()
-        result = session.query(Quotes).filter(Quotes.keyword == keyword).\
-            with_entities(Quotes.content, Quotes.markdown)
+        result = (
+            session.query(Quotes)
+            .filter(Quotes.keyword == keyword)
+            .with_entities(Quotes.content, Quotes.markdown)
+        )
         session.close()
 
         return result
@@ -116,17 +164,21 @@ class DataInterface:
     # @staticmethod
     def select_quotes_like_keyword(self, keyword):
         session = self.br.get_session()
-        result = session.query(Quotes).filter(Quotes.keyword.like(f'%{keyword}%')).\
-            with_entities(Quotes.keyword)
+        result = (
+            session.query(Quotes)
+            .filter(Quotes.keyword.like(f"%{keyword}%"))
+            .with_entities(Quotes.keyword)
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_all_quote_keywords(self, ):
+    def select_all_quote_keywords(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Quotes).order_by(Quotes.id).\
-            with_entities(Quotes.keyword)
+        result = session.query(Quotes).order_by(Quotes.id).with_entities(Quotes.keyword)
         session.close()
 
         return result
@@ -134,46 +186,73 @@ class DataInterface:
     # @staticmethod
     def select_quote_author_by_keyword(self, keyword):
         session = self.br.get_session()
-        result = session.query(Quotes).filter(Quotes.keyword == keyword).\
-            with_entities(Quotes.keyword, Quotes.author_id)
+        result = (
+            session.query(Quotes)
+            .filter(Quotes.keyword == keyword)
+            .with_entities(Quotes.keyword, Quotes.author_id)
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_titles_tracked_by_bot(self, ):
+    def select_titles_tracked_by_bot(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(UsersXTracked).join(Users, UsersXTracked.user_id == Users.id).\
-            with_entities(UsersXTracked.mal_aid.label('mal_aid'), Users.tg_nick.label('tg_nick'))
+        result = (
+            session.query(UsersXTracked)
+            .join(Users, UsersXTracked.user_id == Users.id)
+            .with_entities(
+                UsersXTracked.mal_aid.label("mal_aid"), Users.tg_nick.label("tg_nick")
+            )
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_titles_tracked_in_lists(self, ):
+    def select_titles_tracked_in_lists(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, ListStatus.user_id == Users.mal_uid).\
-            filter(ListStatus.status == 1, ListStatus.airing == 1).\
-            with_entities(ListStatus.mal_aid.label('mal_aid'), Users.tg_nick.label('tg_nick'))
+        result = (
+            session.query(ListStatus)
+            .join(Users, ListStatus.user_id == Users.mal_uid)
+            .filter(ListStatus.status == 1, ListStatus.airing == 1)
+            .with_entities(
+                ListStatus.mal_aid.label("mal_aid"), Users.tg_nick.label("tg_nick")
+            )
+        )
         session.close()
 
         return result
 
     def select_all_tracked_titles(self):
-        list_union = self.select_titles_tracked_by_bot().union(self.select_titles_tracked_in_lists()).subquery()
+        list_union = (
+            self.select_titles_tracked_by_bot()
+            .union(self.select_titles_tracked_in_lists())
+            .subquery()
+        )
         session = self.br.get_session()
-        result = session.query(list_union).\
-            join(Anime, Anime.mal_aid == list_union.c.mal_aid).\
-            filter(Anime.status == 'Currently Airing').\
-            group_by(Anime.mal_aid).\
-            order_by(desc(func.count(list_union.c.mal_aid))).\
-            with_entities(Anime.title, list_union.c.mal_aid, func.count(list_union.c.mal_aid))
+        result = (
+            session.query(list_union)
+            .join(Anime, Anime.mal_aid == list_union.c.mal_aid)
+            .filter(Anime.status == "Currently Airing")
+            .group_by(Anime.mal_aid)
+            .order_by(desc(func.count(list_union.c.mal_aid)))
+            .with_entities(
+                Anime.title, list_union.c.mal_aid, func.count(list_union.c.mal_aid)
+            )
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_ongoing_ids(self, ):
+    def select_ongoing_ids(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(Ongoings).with_entities(Ongoings.mal_aid)
         session.close()
@@ -181,12 +260,18 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_fresh_movie_ids(self, ):
+    def select_fresh_movie_ids(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Anime).\
-            filter(Anime.show_type == 'Movie',
-                   Anime.started_at >= datetime.now() - timedelta(days=720)).\
-            with_entities(Anime.mal_aid)
+        result = (
+            session.query(Anime)
+            .filter(
+                Anime.show_type == "Movie",
+                Anime.started_at >= datetime.now() - timedelta(days=720),
+            )
+            .with_entities(Anime.mal_aid)
+        )
         session.close()
 
         return result
@@ -194,73 +279,112 @@ class DataInterface:
     # # @staticmethod
     # def select_registered_tg_users_count(self):
     #     return self.select_user_tg_ids().count()
-            # session.query(Users).with_entities(func.count(Users.tg_id))
+    # session.query(Users).with_entities(func.count(Users.tg_id))
 
     # @staticmethod
-    def select_users_with_ongoing_titles_in_list(self, ):
+    def select_users_with_ongoing_titles_in_list(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
-            .filter(ListStatus.status == 1, ListStatus.airing == 1)\
-            .filter(ListStatus.show_type.in_(TYPE_LIST))\
-            .with_entities(Users.mal_nick).distinct()
+        result = (
+            session.query(ListStatus)
+            .join(Users, Users.mal_uid == ListStatus.user_id)
+            .filter(ListStatus.status == 1, ListStatus.airing == 1)
+            .filter(ListStatus.show_type.in_(TYPE_LIST))
+            .with_entities(Users.mal_nick)
+            .distinct()
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_users_with_any_titles_in_list(self, ):
+    def select_users_with_any_titles_in_list(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id)\
-            .with_entities(Users.mal_nick, Users.tg_nick).distinct()
+        result = (
+            session.query(ListStatus)
+            .join(Users, Users.mal_uid == ListStatus.user_id)
+            .with_entities(Users.mal_nick, Users.tg_nick)
+            .distinct()
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_all_recognized_titles_stats(self, ):
+    def select_all_recognized_titles_stats(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Ongoings).join(Anime, Anime.mal_aid == Ongoings.mal_aid)\
-            .filter(or_(Ongoings.last_ep < Anime.eps, Anime.eps == None))\
-            .order_by(Anime.title)\
-            .with_entities(Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid).distinct()
+        result = (
+            session.query(Ongoings)
+            .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
+            .filter(or_(Ongoings.last_ep < Anime.eps, Anime.eps == None))
+            .order_by(Anime.title)
+            .with_entities(
+                Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid
+            )
+            .distinct()
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_locked_out_ongoings(self, ):
+    def select_locked_out_ongoings(
+        self,
+    ):
         threshold = datetime.now() - timedelta(hours=24)
         session = self.br.get_session()
-        result = session.query(Ongoings).join(Anime, Anime.mal_aid == Ongoings.mal_aid).\
-            filter(Ongoings.last_release >= threshold, Ongoings.last_ep > 1).\
-            with_entities(Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid)
+        result = (
+            session.query(Ongoings)
+            .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
+            .filter(Ongoings.last_release >= threshold, Ongoings.last_ep > 1)
+            .with_entities(
+                Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid
+            )
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_future_anime(self, ):
+    def select_future_anime(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Anime).\
-            join(t_anime_x_producers, t_anime_x_producers.c.mal_aid == Anime.mal_aid).\
-            join(Producers, Producers.mal_pid == t_anime_x_producers.c.mal_pid).\
-            filter(or_(Anime.started_at == None, Anime.started_at > datetime.now())).\
-            order_by(Anime.started_at).\
-            with_entities(Anime.mal_aid, Anime.title, Anime.show_type, Anime.started_at, Producers.name)
+        result = (
+            session.query(Anime)
+            .join(t_anime_x_producers, t_anime_x_producers.c.mal_aid == Anime.mal_aid)
+            .join(Producers, Producers.mal_pid == t_anime_x_producers.c.mal_pid)
+            .filter(or_(Anime.started_at == None, Anime.started_at > datetime.now()))
+            .order_by(Anime.started_at)
+            .with_entities(
+                Anime.mal_aid,
+                Anime.title,
+                Anime.show_type,
+                Anime.started_at,
+                Producers.name,
+            )
+        )
         session.close()
 
         return result
 
     def select_future_anime_by_producer(self, producer_name):
         session = self.br.get_session()
-        result = self.select_future_anime().filter(Producers.name.like(f'%{producer_name}%'))
+        result = self.select_future_anime().filter(
+            Producers.name.like(f"%{producer_name}%")
+        )
         session.close()
 
         return result
 
     def select_future_anime_by_title(self, anime_title):
         session = self.br.get_session()
-        result = self.select_future_anime().filter(Anime.title.like(f'%{anime_title}%'))
+        result = self.select_future_anime().filter(Anime.title.like(f"%{anime_title}%"))
         session.close()
 
         return result
@@ -268,9 +392,11 @@ class DataInterface:
     # @staticmethod
     def select_user_list_address_by_tg_id(self, tg_id):
         session = self.br.get_session()
-        result = session.query(Users).\
-            filter(Users.tg_id == tg_id).\
-            with_entities(Users.mal_nick, Users.service)
+        result = (
+            session.query(Users)
+            .filter(Users.tg_id == tg_id)
+            .with_entities(Users.mal_nick, Users.service)
+        )
         session.close()
 
         return result
@@ -278,10 +404,12 @@ class DataInterface:
     # @staticmethod
     def select_anime_seen_by_title(self, title):
         session = self.br.get_session()
-        result = session.query(ListStatus).\
-            filter(ListStatus.title.like(f'%{title}%')).\
-            with_entities(ListStatus.title, ListStatus.mal_aid).\
-            distinct()
+        result = (
+            session.query(ListStatus)
+            .filter(ListStatus.title.like(f"%{title}%"))
+            .with_entities(ListStatus.title, ListStatus.mal_aid)
+            .distinct()
+        )
         session.close()
 
         return result
@@ -289,10 +417,15 @@ class DataInterface:
     # @staticmethod
     def select_user_info_for_seen_title(self, mal_aid):
         session = self.br.get_session()
-        result = session.query(ListStatus).join(Users, Users.mal_uid == ListStatus.user_id).\
-            filter(ListStatus.mal_aid == mal_aid).\
-            order_by(desc(ListStatus.score)).\
-            with_entities(Users.tg_nick, ListStatus.score, ListStatus.status, ListStatus.watched)
+        result = (
+            session.query(ListStatus)
+            .join(Users, Users.mal_uid == ListStatus.user_id)
+            .filter(ListStatus.mal_aid == mal_aid)
+            .order_by(desc(ListStatus.score))
+            .with_entities(
+                Users.tg_nick, ListStatus.score, ListStatus.status, ListStatus.watched
+            )
+        )
         session.close()
 
         return result
@@ -300,9 +433,9 @@ class DataInterface:
     # @staticmethod
     def select_user_id_by_tg_id(self, tg_id):
         session = self.br.get_session()
-        result = session.query(Users).\
-            filter(Users.tg_id == tg_id).\
-            with_entities(Users.id)
+        result = (
+            session.query(Users).filter(Users.tg_id == tg_id).with_entities(Users.id)
+        )
         session.close()
 
         return result
@@ -310,11 +443,13 @@ class DataInterface:
     # @staticmethod
     def select_tracked_titles_by_user_tg_id(self, tg_id):
         session = self.br.get_session()
-        result = session.query(UsersXTracked).\
-            join(Anime, UsersXTracked.mal_aid == Anime.mal_aid).\
-            join(Users, Users.id == UsersXTracked.user_id).\
-            filter(Users.tg_id == tg_id, Anime.status != 'Finished Airing').\
-            with_entities(UsersXTracked.mal_aid, Anime.title, UsersXTracked.a_group)
+        result = (
+            session.query(UsersXTracked)
+            .join(Anime, UsersXTracked.mal_aid == Anime.mal_aid)
+            .join(Users, Users.id == UsersXTracked.user_id)
+            .filter(Users.tg_id == tg_id, Anime.status != "Finished Airing")
+            .with_entities(UsersXTracked.mal_aid, Anime.title, UsersXTracked.a_group)
+        )
         session.close()
 
         return result
@@ -322,10 +457,13 @@ class DataInterface:
     # @staticmethod
     def select_anime_to_track_from_ongoings_by_title(self, title):
         session = self.br.get_session()
-        result = session.query(Ongoings).join(Anime, Anime.mal_aid == Ongoings.mal_aid).\
-            filter(Anime.title.like(f'%{title}%')).\
-            filter(Anime.show_type.in_(TYPE_LIST)).\
-            with_entities(Ongoings.mal_aid, Anime.title)
+        result = (
+            session.query(Ongoings)
+            .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
+            .filter(Anime.title.like(f"%{title}%"))
+            .filter(Anime.show_type.in_(TYPE_LIST))
+            .with_entities(Ongoings.mal_aid, Anime.title)
+        )
         session.close()
 
         return result
@@ -333,10 +471,12 @@ class DataInterface:
     # @staticmethod
     def select_anime_tracked_by_user_id_and_anime_id(self, user_id, mal_aid):
         session = self.br.get_session()
-        result = session.query(UsersXTracked).\
-            filter(UsersXTracked.user_id == user_id).\
-            filter(UsersXTracked.mal_aid == mal_aid).\
-            with_entities(UsersXTracked.mal_aid)
+        result = (
+            session.query(UsersXTracked)
+            .filter(UsersXTracked.user_id == user_id)
+            .filter(UsersXTracked.mal_aid == mal_aid)
+            .with_entities(UsersXTracked.mal_aid)
+        )
         session.close()
 
         return result
@@ -344,11 +484,14 @@ class DataInterface:
     # @staticmethod
     def select_anime_tracked_by_user_id_and_title(self, user_id, title):
         session = self.br.get_session()
-        result = session.query(UsersXTracked).join(Anime, Anime.mal_aid == UsersXTracked.mal_aid).\
-            filter(Anime.title.like(f'%{title}%')).\
-            filter(Anime.show_type.in_(TYPE_LIST)).\
-            filter(UsersXTracked.user_id == user_id).\
-            with_entities(UsersXTracked.mal_aid, Anime.title)
+        result = (
+            session.query(UsersXTracked)
+            .join(Anime, Anime.mal_aid == UsersXTracked.mal_aid)
+            .filter(Anime.title.like(f"%{title}%"))
+            .filter(Anime.show_type.in_(TYPE_LIST))
+            .filter(UsersXTracked.user_id == user_id)
+            .with_entities(UsersXTracked.mal_aid, Anime.title)
+        )
         session.close()
 
         return result
@@ -356,9 +499,11 @@ class DataInterface:
     # @staticmethod
     def select_gif_tags_by_media_id(self, file_id):
         session = self.br.get_session()
-        result = session.query(GifTags).\
-            filter(GifTags.media_id == file_id).\
-            with_entities(GifTags.media_id, GifTags.tag)
+        result = (
+            session.query(GifTags)
+            .filter(GifTags.media_id == file_id)
+            .with_entities(GifTags.media_id, GifTags.tag)
+        )
         session.close()
 
         return result
@@ -388,10 +533,20 @@ class DataInterface:
         #                               'anime_x_synonyms axs join anime a on a.mal_aid = axs.mal_aid',
         #                               'axs.synonym = %s and a.popularity is not NULL', [query])
         session = self.br.get_session()
-        mal_info = session.query(AnimeXSynonyms).join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid).\
-            filter(AnimeXSynonyms.synonym == query, Anime.popularity != None).\
-            with_entities(AnimeXSynonyms.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.popularity).\
-            distinct().all()
+        mal_info = (
+            session.query(AnimeXSynonyms)
+            .join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid)
+            .filter(AnimeXSynonyms.synonym == query, Anime.popularity != None)
+            .with_entities(
+                AnimeXSynonyms.mal_aid,
+                Anime.title,
+                Anime.show_type,
+                Anime.eps,
+                Anime.popularity,
+            )
+            .distinct()
+            .all()
+        )
         session.close()
 
         return mal_info
@@ -402,10 +557,20 @@ class DataInterface:
         #                               'anime_x_synonyms axs join anime a on a.mal_aid = axs.mal_aid',
         #                               'axs.synonym like %s and a.popularity is not NULL', [f'%{query}%'])
         session = self.br.get_session()
-        mal_info = session.query(AnimeXSynonyms).join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid).\
-            filter(AnimeXSynonyms.synonym.like(f'%{query}%'), Anime.popularity != None).\
-            with_entities(AnimeXSynonyms.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.popularity).\
-            distinct().all()
+        mal_info = (
+            session.query(AnimeXSynonyms)
+            .join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid)
+            .filter(AnimeXSynonyms.synonym.like(f"%{query}%"), Anime.popularity != None)
+            .with_entities(
+                AnimeXSynonyms.mal_aid,
+                Anime.title,
+                Anime.show_type,
+                Anime.eps,
+                Anime.popularity,
+            )
+            .distinct()
+            .all()
+        )
         session.close()
 
         return mal_info
@@ -413,25 +578,40 @@ class DataInterface:
     # @staticmethod
     # todo tbh this requires a specific instrument like elastic
     def select_anime_info_by_split_words(self, query):
-        q_string = '%' + '%'.join(re.sub(r'\W+', ' ', query).split(' ')) + '%'
+        q_string = "%" + "%".join(re.sub(r"\W+", " ", query).split(" ")) + "%"
         # mal_info = self.ani_db.select('distinct axs.mal_aid, a.title, a.status, a.show_type, a.eps, a.popularity',
         #                               'anime_x_synonyms axs join anime a on a.mal_aid = axs.mal_aid',
         #                               'axs.synonym rlike %s and a.popularity is not NULL',
         #                               [r_string])
         session = self.br.get_session()
-        mal_info = session.query(AnimeXSynonyms).join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid).\
-            filter(AnimeXSynonyms.synonym.like(q_string), Anime.popularity != None).\
-            with_entities(AnimeXSynonyms.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.popularity).\
-            distinct().all()
+        mal_info = (
+            session.query(AnimeXSynonyms)
+            .join(Anime, Anime.mal_aid == AnimeXSynonyms.mal_aid)
+            .filter(AnimeXSynonyms.synonym.like(q_string), Anime.popularity != None)
+            .with_entities(
+                AnimeXSynonyms.mal_aid,
+                Anime.title,
+                Anime.show_type,
+                Anime.eps,
+                Anime.popularity,
+            )
+            .distinct()
+            .all()
+        )
         session.close()
 
         return mal_info
 
     # @staticmethod
-    def select_relations_data(self, ):
+    def select_relations_data(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Anime) \
-            .with_entities(Anime.mal_aid, Anime.related, Anime.title, )
+        result = session.query(Anime).with_entities(
+            Anime.mal_aid,
+            Anime.related,
+            Anime.title,
+        )
         session.close()
 
         return result
@@ -442,9 +622,11 @@ class DataInterface:
     # @staticmethod
     def select_service_users_ids(self, service_name):
         session = self.br.get_session()
-        result = session.query(Users).\
-            filter(Users.service == service_name).\
-            with_entities(Users.mal_nick, Users.mal_uid)
+        result = (
+            session.query(Users)
+            .filter(Users.service == service_name)
+            .with_entities(Users.mal_nick, Users.mal_uid)
+        )
         session.close()
 
         return result
@@ -452,15 +634,19 @@ class DataInterface:
     # @staticmethod
     def select_user_is_in_list_status(self, service_user_id):
         session = self.br.get_session()
-        result = session.query(ListStatus).\
-            filter(ListStatus.user_id == service_user_id).\
-            with_entities(ListStatus.user_id)
+        result = (
+            session.query(ListStatus)
+            .filter(ListStatus.user_id == service_user_id)
+            .with_entities(ListStatus.user_id)
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_genres(self, ):
+    def select_genres(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(Genres.mal_gid)
         session.close()
@@ -468,7 +654,9 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_licensors(self, ):
+    def select_licensors(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(Licensors.name)
         session.close()
@@ -476,7 +664,9 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_producers(self, ):
+    def select_producers(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(Producers.mal_pid)
         session.close()
@@ -487,84 +677,119 @@ class DataInterface:
 
     # @staticmethod
     def select_feed_entry_by_title_and_date(self, a_title, a_date, session):
-        result = session.query(AniFeeds).filter(AniFeeds.title == a_title, AniFeeds.date == a_date)
+        result = session.query(AniFeeds).filter(
+            AniFeeds.title == a_title, AniFeeds.date == a_date
+        )
 
         return result
 
     # @staticmethod
-    def select_last_feed_entry(self, ):
+    def select_last_feed_entry(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(AniFeeds).\
-            order_by(desc(AniFeeds.date)).\
-            limit(1).\
-            with_entities(AniFeeds.date, AniFeeds.title)
+        result = (
+            session.query(AniFeeds)
+            .order_by(desc(AniFeeds.date))
+            .limit(1)
+            .with_entities(AniFeeds.date, AniFeeds.title)
+        )
         session.close()
 
         return result
 
     # @staticmethod
     def select_unchecked_feed_entries(self, session):
-        result = session.query(AniFeeds).filter(AniFeeds.checked == 0).order_by(AniFeeds.date)
+        result = (
+            session.query(AniFeeds)
+            .filter(AniFeeds.checked == 0)
+            .order_by(AniFeeds.date)
+        )
 
         return result
 
     # @staticmethod
     def select_ongoing_anime_id_by_synonym(self, synonym, session):
-        result = session.query(AnimeXSynonyms).join(Anime).\
-            filter(AnimeXSynonyms.synonym == synonym, Anime.status != 'Finished Airing').\
-            with_entities(AnimeXSynonyms.mal_aid)
+        result = (
+            session.query(AnimeXSynonyms)
+            .join(Anime)
+            .filter(
+                AnimeXSynonyms.synonym == synonym, Anime.status != "Finished Airing"
+            )
+            .with_entities(AnimeXSynonyms.mal_aid)
+        )
 
         return result
 
     # @staticmethod
     def select_mal_anime_ids_by_title_part(self, title, session):
-        result = session.query(Ongoings).join(Anime).\
-            filter(
+        result = (
+            session.query(Ongoings)
+            .join(Anime)
+            .filter(
                 Anime.show_type.in_(TYPE_LIST),
-                Anime.status != 'Finished Airing',
+                Anime.status != "Finished Airing",
                 Anime.started_at < datetime.now() + timedelta(hours=24),
-            ).\
-            filter(Anime.title.like(f'%{title}%')).\
-            with_entities(Ongoings.mal_aid).\
-            distinct()
+            )
+            .filter(Anime.title.like(f"%{title}%"))
+            .with_entities(Ongoings.mal_aid)
+            .distinct()
+        )
 
         return result
 
     # @staticmethod
     def select_anime_id_is_in_database(self, mal_aid, session):
-        result = session.query(Anime).\
-            filter(Anime.mal_aid == mal_aid).\
-            with_entities(Anime.mal_aid)
+        result = (
+            session.query(Anime)
+            .filter(Anime.mal_aid == mal_aid)
+            .with_entities(Anime.mal_aid)
+        )
 
         return result
 
     # @staticmethod
-    def select_torrent_is_saved_in_database(self, mal_aid, group, episode, res, size, session):
-        result = session.query(TorrentFiles).\
-            filter(TorrentFiles.mal_aid == mal_aid, TorrentFiles.a_group == group, TorrentFiles.episode == episode,
-                   TorrentFiles.res == res, TorrentFiles.file_size == size)
+    def select_torrent_is_saved_in_database(
+        self, mal_aid, group, episode, res, size, session
+    ):
+        result = session.query(TorrentFiles).filter(
+            TorrentFiles.mal_aid == mal_aid,
+            TorrentFiles.a_group == group,
+            TorrentFiles.episode == episode,
+            TorrentFiles.res == res,
+            TorrentFiles.file_size == size,
+        )
 
         return result
 
     # @staticmethod
     def select_last_ongoing_ep_by_id(self, mal_aid, session):
-        result = session.query(Ongoings).filter(Ongoings.mal_aid == mal_aid).\
-            with_entities(Ongoings.last_ep)
+        result = (
+            session.query(Ongoings)
+            .filter(Ongoings.mal_aid == mal_aid)
+            .with_entities(Ongoings.last_ep)
+        )
 
         return result
 
     # jobs SELECT methods
 
     # @staticmethod
-    def select_today_titles(self, ):
+    def select_today_titles(self, user_id=None):
         session = self.br.get_session()
         result = session.query(v_today_titles)
+        if user_id:
+            result = result.join(
+                UsersXTracked, UsersXTracked.mal_aid == v_today_titles.c.mal_aid
+            ).filter_by(user_id=user_id)
         session.close()
 
         return result
 
     # @staticmethod
-    def select_titles_pending_for_delivery(self, ):
+    def select_titles_pending_for_delivery(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(v_pending_delivery)
         session.close()
@@ -572,10 +797,20 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_waifu_blocker_shows(self, ):
+    def select_waifu_blocker_shows(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Anime).filter(or_(and_(Anime.show_type == 'ONA', Anime.eps > 3), Anime.show_type == 'TV'))\
+        result = (
+            session.query(Anime)
+            .filter(
+                or_(
+                    and_(Anime.show_type == "ONA", Anime.eps > 3),
+                    Anime.show_type == "TV",
+                )
+            )
             .with_entities(Anime.mal_aid)
+        )
         session.close()
 
         return result
@@ -584,14 +819,17 @@ class DataInterface:
     # @staticmethod
     def select_by_synonym_id_pair(self, mal_aid, synonym):
         session = self.br.get_session()
-        result = session.query(AnimeXSynonyms)\
-            .filter(AnimeXSynonyms.mal_aid == mal_aid, AnimeXSynonyms.synonym == synonym)
+        result = session.query(AnimeXSynonyms).filter(
+            AnimeXSynonyms.mal_aid == mal_aid, AnimeXSynonyms.synonym == synonym
+        )
         session.close()
 
         return result
 
     # @staticmethod
-    def select_existing_synonyms(self, ):
+    def select_existing_synonyms(
+        self,
+    ):
         session = self.br.get_session()
         result = session.query(AnimeXSynonyms)
         session.close()
@@ -599,10 +837,17 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_all_possible_synonyms(self, ):
+    def select_all_possible_synonyms(
+        self,
+    ):
         session = self.br.get_session()
-        result = session.query(Anime). \
-            with_entities(Anime.mal_aid, Anime.title, Anime.title_eng, Anime.title_jap, Anime.title_synonyms)
+        result = session.query(Anime).with_entities(
+            Anime.mal_aid,
+            Anime.title,
+            Anime.title_eng,
+            Anime.title_jap,
+            Anime.title_synonyms,
+        )
         session.close()
 
         return result
@@ -610,7 +855,9 @@ class DataInterface:
     # handler_modules INSERT methods
     # @staticmethod
     def insert_new_tracked_title(self, user_id, mal_aid, last_ep, a_group):
-        new_tracked = UsersXTracked(user_id=user_id, mal_aid=mal_aid, last_ep=last_ep, a_group=a_group)
+        new_tracked = UsersXTracked(
+            user_id=user_id, mal_aid=mal_aid, last_ep=last_ep, a_group=a_group
+        )
         session = self.br.get_session()
         session.add(new_tracked)
         session.commit()
@@ -619,18 +866,38 @@ class DataInterface:
     def upsert_anime_entry(self, a_entry, session):
         local_entry = self.select_anime_by_id(a_entry.mal_id, sess=session).first()
         if not local_entry:
-            local_entry = Anime(mal_aid=a_entry.mal_id, title=a_entry.title, title_eng=a_entry.title_english,
-                                title_jap=a_entry.title_japanese, synopsis=a_entry.synopsis, show_type=a_entry.type,
-                                started_at=a_entry.aired['from'][:10] if a_entry.aired['from'] else None,
-                                ended_at=a_entry.aired['to'][:10] if a_entry.aired['to'] else None,
-                                eps=a_entry.episodes, img_url=a_entry.image_url, score=a_entry.score,
-                                status=a_entry.status, background=a_entry.background, broadcast=a_entry.broadcast,
-                                duration=a_entry.duration, favorites=a_entry.favorites, members=a_entry.members,
-                                popularity=a_entry.popularity, premiered=a_entry.premiered, rank=a_entry.rank,
-                                rating=a_entry.rating, scored_by=a_entry.scored_by, source=a_entry.source,
-                                trailer_url=a_entry.trailer_url, ending_themes=a_entry.ending_themes,
-                                related=a_entry.related, opening_themes=a_entry.opening_themes,
-                                title_synonyms=a_entry.title_synonyms, )
+            local_entry = Anime(
+                mal_aid=a_entry.mal_id,
+                title=a_entry.title,
+                title_eng=a_entry.title_english,
+                title_jap=a_entry.title_japanese,
+                synopsis=a_entry.synopsis,
+                show_type=a_entry.type,
+                started_at=a_entry.aired["from"][:10]
+                if a_entry.aired["from"]
+                else None,
+                ended_at=a_entry.aired["to"][:10] if a_entry.aired["to"] else None,
+                eps=a_entry.episodes,
+                img_url=a_entry.image_url,
+                score=a_entry.score,
+                status=a_entry.status,
+                background=a_entry.background,
+                broadcast=a_entry.broadcast,
+                duration=a_entry.duration,
+                favorites=a_entry.favorites,
+                members=a_entry.members,
+                popularity=a_entry.popularity,
+                premiered=a_entry.premiered,
+                rank=a_entry.rank,
+                rating=a_entry.rating,
+                scored_by=a_entry.scored_by,
+                source=a_entry.source,
+                trailer_url=a_entry.trailer_url,
+                ending_themes=a_entry.ending_themes,
+                related=a_entry.related,
+                opening_themes=a_entry.opening_themes,
+                title_synonyms=a_entry.title_synonyms,
+            )
             session.add(local_entry)
         else:
             local_entry.title = a_entry.title
@@ -638,8 +905,12 @@ class DataInterface:
             local_entry.title_jap = a_entry.title_japanese
             local_entry.synopsis = a_entry.synopsis
             local_entry.show_type = a_entry.type
-            local_entry.started_at = a_entry.aired['from'][:10] if a_entry.aired['from'] else None
-            local_entry.ended_at = a_entry.aired['to'][:10] if a_entry.aired['to'] else None
+            local_entry.started_at = (
+                a_entry.aired["from"][:10] if a_entry.aired["from"] else None
+            )
+            local_entry.ended_at = (
+                a_entry.aired["to"][:10] if a_entry.aired["to"] else None
+            )
             local_entry.eps = a_entry.episodes
             local_entry.img_url = a_entry.image_url
             local_entry.score = a_entry.score
@@ -683,7 +954,9 @@ class DataInterface:
     # @staticmethod
     def insert_new_quote(self, keyword, content, markdown, author_id):
         session = self.br.get_session()
-        new_quote = Quotes(keyword=keyword, content=content, markdown=markdown, author_id=author_id)
+        new_quote = Quotes(
+            keyword=keyword, content=content, markdown=markdown, author_id=author_id
+        )
         session.add(new_quote)
         session.commit()
         session.close()
@@ -691,13 +964,13 @@ class DataInterface:
     # @staticmethod
     def insert_new_genres(self, genre_list, session):
         for genre in genre_list:
-            new_genre = Genres(mal_gid=genre['mal_id'], name=genre['name'])
+            new_genre = Genres(mal_gid=genre["mal_id"], name=genre["name"])
             session.add(new_genre)
 
     # @staticmethod
     def insert_new_producers(self, producer_list, session):
         for producer in producer_list:
-            new_producer = Producers(mal_pid=producer['mal_id'], name=producer['name'])
+            new_producer = Producers(mal_pid=producer["mal_id"], name=producer["name"])
             session.add(new_producer)
 
     # @staticmethod
@@ -708,36 +981,61 @@ class DataInterface:
 
     # @staticmethod
     def insert_new_axg(self, anime, session):
-        anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        new_axg = [genre for genre in anime['genres'] if genre['mal_id'] not in anime_.genres]
+        anime_ = session.query(Anime).filter(Anime.mal_aid == anime["mal_id"]).first()
+        new_axg = [
+            genre for genre in anime["genres"] if genre["mal_id"] not in anime_.genres
+        ]
         for genre in new_axg:
-            genre_ = session.query(Genres).filter(Genres.mal_gid == genre['mal_id']).first()
+            genre_ = (
+                session.query(Genres).filter(Genres.mal_gid == genre["mal_id"]).first()
+            )
             anime_.genres.append(genre_)
 
     # @staticmethod
     def insert_new_axp(self, anime, session):
-        anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        new_axp = [producer for producer in anime['producers'] if producer['mal_id'] not in anime_.producers]
+        anime_ = session.query(Anime).filter(Anime.mal_aid == anime["mal_id"]).first()
+        new_axp = [
+            producer
+            for producer in anime["producers"]
+            if producer["mal_id"] not in anime_.producers
+        ]
         for producer in new_axp:
-            producer_ = session.query(Producers).filter(Producers.mal_pid == producer['mal_id']).first()
+            producer_ = (
+                session.query(Producers)
+                .filter(Producers.mal_pid == producer["mal_id"])
+                .first()
+            )
             anime_.producers.append(producer_)
 
     # @staticmethod
     def insert_new_axl(self, anime, session):
-        anime_ = session.query(Anime).filter(Anime.mal_aid == anime['mal_id']).first()
-        new_axl = [licensor for licensor in anime['licensors'] if licensor not in anime_.licensors]
+        anime_ = session.query(Anime).filter(Anime.mal_aid == anime["mal_id"]).first()
+        new_axl = [
+            licensor
+            for licensor in anime["licensors"]
+            if licensor not in anime_.licensors
+        ]
         for licensor in new_axl:
-            licensor_ = session.query(Licensors).filter(Licensors.name == licensor).first()
+            licensor_ = (
+                session.query(Licensors).filter(Licensors.name == licensor).first()
+            )
             anime_.licensors.append(licensor_)
 
     # @staticmethod
     def insert_new_animelist(self, mal_uid, anime_list):
         session = self.br.get_session()
         for anime in anime_list:
-            list_entry = ListStatus(user_id=mal_uid, mal_aid=anime['mal_id'], title=anime['title'],
-                                    show_type=anime['type'], status=anime['watching_status'],
-                                    watched=anime['watched_episodes'], eps=anime['total_episodes'],
-                                    score=anime['score'], airing=anime['airing_status'])
+            list_entry = ListStatus(
+                user_id=mal_uid,
+                mal_aid=anime["mal_id"],
+                title=anime["title"],
+                show_type=anime["type"],
+                status=anime["watching_status"],
+                watched=anime["watched_episodes"],
+                eps=anime["total_episodes"],
+                score=anime["score"],
+                airing=anime["airing_status"],
+            )
             session.add(list_entry)
         session.commit()
         session.close()
@@ -745,14 +1043,24 @@ class DataInterface:
     # feed_parser INSERT methods
     # @staticmethod
     def insert_new_feed_entry(self, a_title, a_date, a_link, a_description, session):
-        feed_entry = AniFeeds(title=a_title, date=a_date, link=a_link, description=a_description)
+        feed_entry = AniFeeds(
+            title=a_title, date=a_date, link=a_link, description=a_description
+        )
         session.add(feed_entry)
         session.commit()
 
     # @staticmethod
-    def insert_new_torrent_file(self, mal_aid, group, episode, filename, res, size, session):
-        torrent_file = TorrentFiles(mal_aid=mal_aid, a_group=group, episode=episode, torrent=filename, res=res,
-                                        file_size=size)
+    def insert_new_torrent_file(
+        self, mal_aid, group, episode, filename, res, size, session
+    ):
+        torrent_file = TorrentFiles(
+            mal_aid=mal_aid,
+            a_group=group,
+            episode=episode,
+            torrent=filename,
+            res=res,
+            file_size=size,
+        )
         session.add(torrent_file)
         session.commit()
 
@@ -765,7 +1073,7 @@ class DataInterface:
             session.add(new_synonym)
             session.commit()
         except Exception:
-            print('INTEGRITY FAILURE')
+            print("INTEGRITY FAILURE")
             session.rollback()
         finally:
             session.close()
@@ -775,27 +1083,23 @@ class DataInterface:
     # @staticmethod
     def delete_tracked_anime(self, user_id, mal_aid):
         session = self.br.get_session()
-        session.query(UsersXTracked).\
-            filter(UsersXTracked.user_id == user_id, UsersXTracked.mal_aid == mal_aid).\
-            delete()
+        session.query(UsersXTracked).filter(
+            UsersXTracked.user_id == user_id, UsersXTracked.mal_aid == mal_aid
+        ).delete()
         session.commit()
         session.close()
 
     # @staticmethod
     def delete_quotes_by_keyword(self, keyword):
         session = self.br.get_session()
-        session.query(Quotes).\
-            filter(Quotes.keyword == keyword).\
-            delete()
+        session.query(Quotes).filter(Quotes.keyword == keyword).delete()
         session.close()
 
     # ListStatus DELETE handler_modules
     # @staticmethod
     def delete_list_by_user_id(self, user_id):
         session = self.br.get_session()
-        session.query(ListStatus).\
-            filter(ListStatus.user_id == user_id).\
-            delete()
+        session.query(ListStatus).filter(ListStatus.user_id == user_id).delete()
         session.commit()
         session.close()
 
@@ -819,8 +1123,11 @@ class DataInterface:
     # @staticmethod
     def update_group_for_users_release_tracking(self, a_group, user_id, mal_aid):
         session = self.br.get_session()
-        release = session.query(UsersXTracked).filter(UsersXTracked.user_id == user_id,
-                                                      UsersXTracked.mal_aid == mal_aid).first()
+        release = (
+            session.query(UsersXTracked)
+            .filter(UsersXTracked.user_id == user_id, UsersXTracked.mal_aid == mal_aid)
+            .first()
+        )
         release.a_group = a_group
         release.last_ep = 0
         session.commit()
@@ -836,11 +1143,20 @@ class DataInterface:
 
     # todo think about additional checking for correct episode numbers
     # @staticmethod
-    def update_release_status_for_user_after_delivery(self, episode, user_id, mal_aid, a_group):
+    def update_release_status_for_user_after_delivery(
+        self, episode, user_id, mal_aid, a_group
+    ):
         session = self.br.get_session()
-        status = session.query(UsersXTracked).\
-            filter(UsersXTracked.user_id == user_id, UsersXTracked.mal_aid == mal_aid,
-                  UsersXTracked.a_group == a_group, UsersXTracked.last_ep < episode).first()
+        status = (
+            session.query(UsersXTracked)
+            .filter(
+                UsersXTracked.user_id == user_id,
+                UsersXTracked.mal_aid == mal_aid,
+                UsersXTracked.a_group == a_group,
+                UsersXTracked.last_ep < episode,
+            )
+            .first()
+        )
         if status:
             status.last_ep = episode
             session.commit()
@@ -850,15 +1166,24 @@ class DataInterface:
     # todo not sure it's actually needed
     # @staticmethod
     def update_anifeeds_entry(self, a_link, a_description, a_title, a_date, session):
-        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == a_title,
-                                                    AniFeeds.date == a_date).first()
+        feed_entry = (
+            session.query(AniFeeds)
+            .filter(AniFeeds.title == a_title, AniFeeds.date == a_date)
+            .first()
+        )
         feed_entry.link = a_link
         feed_entry.description = a_description
         session.commit()
 
     # @staticmethod
-    def update_anifeeds_with_parsed_information(self, mal_aid, a_group, resolution, episode, size, title, date, session):
-        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title, AniFeeds.date == date).first()
+    def update_anifeeds_with_parsed_information(
+        self, mal_aid, a_group, resolution, episode, size, title, date, session
+    ):
+        feed_entry = (
+            session.query(AniFeeds)
+            .filter(AniFeeds.title == title, AniFeeds.date == date)
+            .first()
+        )
         feed_entry.mal_aid = mal_aid
         feed_entry.a_group = a_group
         feed_entry.resolution = resolution
@@ -869,7 +1194,11 @@ class DataInterface:
 
     # @staticmethod
     def update_anifeeds_unrecognized_entry(self, size, title, date, session):
-        feed_entry = session.query(AniFeeds).filter(AniFeeds.title == title, AniFeeds.date == date).first()
+        feed_entry = (
+            session.query(AniFeeds)
+            .filter(AniFeeds.title == title, AniFeeds.date == date)
+            .first()
+        )
         feed_entry.size = size
         feed_entry.checked = 1
         session.commit()
@@ -884,7 +1213,7 @@ class DataInterface:
         session.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     di = DataInterface(BaseRelations())
     # group_list = [entry[0] for entry in di.select_group_list_for_user(38656, 3).all()]
     # pprint(group_list)
