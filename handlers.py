@@ -1,8 +1,5 @@
-# config
 import argparse
 import inspect
-
-# additional utilities
 import logging
 import os
 import re
@@ -13,13 +10,11 @@ from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta
 from io import BufferedReader, BufferedWriter, BytesIO
 from pprint import pprint
-from random import choice as rand_choice
 from time import sleep
 
+# service wrappers
 from jikanpy import APIException
 from PIL import Image, UnidentifiedImageError
-
-# service wrappers
 from saucenao import SauceNao
 
 # telegram bot
