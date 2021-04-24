@@ -543,6 +543,7 @@ class DataInterface:
                 Anime.show_type,
                 Anime.episodes,
                 Anime.popularity,
+                Anime.synced,
             )
             .distinct()
             .all()
@@ -567,6 +568,7 @@ class DataInterface:
                 Anime.show_type,
                 Anime.episodes,
                 Anime.popularity,
+                Anime.synced,
             )
             .distinct()
             .all()
@@ -594,6 +596,7 @@ class DataInterface:
                 Anime.show_type,
                 Anime.episodes,
                 Anime.popularity,
+                Anime.synced,
             )
             .distinct()
             .all()
@@ -932,6 +935,7 @@ class DataInterface:
             local_entry.related = a_entry.related
             local_entry.opening_themes = a_entry.opening_themes
             local_entry.title_synonyms = a_entry.title_synonyms
+        local_entry.synced = datetime.now()
         session.commit()
 
     # @staticmethod

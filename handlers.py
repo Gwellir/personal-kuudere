@@ -128,7 +128,11 @@ class UtilityFunctions:
 
     def get_anime_by_aid(self, mal_aid):
         local_result = self.di.select_anime_by_id(mal_aid).first()
-        if not local_result or not local_result.popularity:
+        if (
+            not local_result
+            or not local_result.popularity
+            or datetime.now() - local_result.synced > timedelta(days=14)
+        ):
             try:
                 anime = self.jikan.anime(mal_aid)
                 output = AnimeEntry(**anime)
@@ -136,7 +140,7 @@ class UtilityFunctions:
             except APIException as e:
                 print(e.args)
                 output = None
-            sleep(config.jikan_delay)
+            # sleep(config.jikan_delay)
         else:
             output = local_result
         return output
@@ -257,6 +261,15 @@ class UtilityFunctions:
                 self.get_anime_by_aid(mal_info[0][0])
             else:
                 return None
+        elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
+            result = self.get_anime_by_aid(mal_info[0][0])
+            mal_info[0] = (
+                result.mal_id,
+                result.title,
+                result.airing,
+                result.type,
+                result.members,
+            )
         else:
             # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
             mal_info = sorted(mal_info, key=lambda item: len(item[1]))

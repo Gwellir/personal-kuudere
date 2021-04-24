@@ -30,6 +30,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.sql.functions import now
 
 # from datetime import datetime
 import config
@@ -94,6 +95,8 @@ class Anime(Base):
     licensors = relationship("Licensors", secondary="anime_x_licensors")
     producers = relationship("Producers", secondary="anime_x_producers")
     studios = relationship("Studios", secondary="anime_x_studios")
+
+    synced = Column(DateTime, default=now)
 
     def __repr__(self):
         return f"<b>Title</b>: %s\n<b>Type</b>: %s\n<b>Status</b>: %s\n<b>Episodes</b>: %s\n<b>Aired</b>: %s to %s\n" f"<b>Score</b>: %s\n<a href='%s'>***</a>\n%s\n\n<b><a href='https://myanimelist.net/anime/%s'>MAL Page</a></b>" % (

@@ -25,6 +25,7 @@ def get_anime_by_ids(ls_ids):
             uf.get_anime_by_aid(ls_ids[i])
         except APIException:
             print("FAIL: ", ls_ids[i])
+        sleep(config.jikan_delay)
         sleep(randint(0, 2))
         if i % 30 == 29:
             print("got", i, "titles -", len(ls_ids) - i, "remaining")
