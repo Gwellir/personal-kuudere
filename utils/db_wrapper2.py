@@ -321,7 +321,7 @@ class DataInterface:
         result = (
             session.query(Ongoings)
             .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
-            .filter(or_(Ongoings.last_ep < Anime.eps, Anime.eps == None))
+            .filter(or_(Ongoings.last_ep < Anime.episodes, Anime.episodes == None))
             .order_by(Anime.title)
             .with_entities(
                 Anime.title, Ongoings.last_ep, Ongoings.last_release, Ongoings.mal_aid
@@ -541,7 +541,7 @@ class DataInterface:
                 AnimeXSynonyms.mal_aid,
                 Anime.title,
                 Anime.show_type,
-                Anime.eps,
+                Anime.episodes,
                 Anime.popularity,
             )
             .distinct()
@@ -565,7 +565,7 @@ class DataInterface:
                 AnimeXSynonyms.mal_aid,
                 Anime.title,
                 Anime.show_type,
-                Anime.eps,
+                Anime.episodes,
                 Anime.popularity,
             )
             .distinct()
@@ -592,7 +592,7 @@ class DataInterface:
                 AnimeXSynonyms.mal_aid,
                 Anime.title,
                 Anime.show_type,
-                Anime.eps,
+                Anime.episodes,
                 Anime.popularity,
             )
             .distinct()
@@ -805,7 +805,7 @@ class DataInterface:
             session.query(Anime)
             .filter(
                 or_(
-                    and_(Anime.show_type == "ONA", Anime.eps > 3),
+                    and_(Anime.show_type == "ONA", Anime.episodes > 3),
                     Anime.show_type == "TV",
                 )
             )
@@ -844,8 +844,8 @@ class DataInterface:
         result = session.query(Anime).with_entities(
             Anime.mal_aid,
             Anime.title,
-            Anime.title_eng,
-            Anime.title_jap,
+            Anime.title_english,
+            Anime.title_japanese,
             Anime.title_synonyms,
         )
         session.close()
@@ -863,14 +863,15 @@ class DataInterface:
         session.commit()
         session.close()
 
+    # todo this is some serious fuckery right here
     def upsert_anime_entry(self, a_entry, session):
         local_entry = self.select_anime_by_id(a_entry.mal_id, sess=session).first()
         if not local_entry:
             local_entry = Anime(
                 mal_aid=a_entry.mal_id,
                 title=a_entry.title,
-                title_eng=a_entry.title_english,
-                title_jap=a_entry.title_japanese,
+                title_english=a_entry.title_english,
+                title_japanese=a_entry.title_japanese,
                 synopsis=a_entry.synopsis,
                 show_type=a_entry.type,
                 started_at=a_entry.aired["from"][:10]
@@ -901,8 +902,8 @@ class DataInterface:
             session.add(local_entry)
         else:
             local_entry.title = a_entry.title
-            local_entry.title_eng = a_entry.title_english
-            local_entry.title_jap = a_entry.title_japanese
+            local_entry.title_english = a_entry.title_english
+            local_entry.title_japanese = a_entry.title_japanese
             local_entry.synopsis = a_entry.synopsis
             local_entry.show_type = a_entry.type
             local_entry.started_at = (
@@ -911,8 +912,8 @@ class DataInterface:
             local_entry.ended_at = (
                 a_entry.aired["to"][:10] if a_entry.aired["to"] else None
             )
-            local_entry.eps = a_entry.episodes
-            local_entry.img_url = a_entry.image_url
+            local_entry.episodes = a_entry.episodes
+            local_entry.image_url = a_entry.image_url
             local_entry.score = a_entry.score
             local_entry.status = a_entry.status
             local_entry.background = a_entry.background

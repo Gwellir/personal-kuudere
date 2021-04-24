@@ -66,13 +66,13 @@ def get_actual_seasons(anime: Anime) -> list:
     if anime.show_type == "TV" and anime.status == "Finished Airing":
         if anime.ended_at:
             end_date = anime.ended_at
-        elif anime.eps and anime.eps > 0:
-            end_date = anime.started_at + timedelta(weeks=anime.eps - 1)
+        elif anime.episodes and anime.episodes > 0:
+            end_date = anime.started_at + timedelta(weeks=anime.episodes - 1)
         else:
             return []
     elif anime.status == "Currently Airing":
-        if anime.eps and anime.eps > 0:
-            end_date = anime.started_at + timedelta(weeks=anime.eps - 1)
+        if anime.episodes and anime.episodes > 0:
+            end_date = anime.started_at + timedelta(weeks=anime.episodes - 1)
         else:
             end_date = datetime.now()
     elif anime.status == "Not yet aired":

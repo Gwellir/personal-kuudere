@@ -3,7 +3,6 @@
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from pprint import pprint
 from time import sleep
 
 import feedparser

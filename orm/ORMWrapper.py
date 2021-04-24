@@ -61,16 +61,16 @@ class Anime(Base):
 
     mal_aid = Column(BIGINT(20), primary_key=True)
     title = Column(String(255), nullable=False, index=True)
-    title_eng = Column(String(255))
-    title_jap = Column(String(255))
+    title_english = Column(String(255))
+    title_japanese = Column(String(255))
     synopsis = Column(Text)
     show_type = Column(
         ENUM("TV", "Movie", "OVA", "Special", "ONA", "Music", "Other", "Unknown")
     )
     started_at = Column(DateTime)
     ended_at = Column(DateTime)
-    eps = Column(SMALLINT(5))
-    img_url = Column(String(100))
+    episodes = Column(SMALLINT(5))
+    image_url = Column(String(100))
     score = Column(Float)
     status = Column(String(30))
     background = Column(Text)
@@ -100,11 +100,11 @@ class Anime(Base):
             self.title,
             self.show_type,
             self.status,
-            self.eps if self.eps else "n/a",
+            self.episodes if self.episodes else "n/a",
             self.started_at.date() if self.started_at else "...",
             self.ended_at.date() if self.ended_at else "...",
             self.score,
-            self.img_url,
+            self.image_url,
             (self.synopsis[:500] + (" &lt;...&gt;" if len(self.synopsis) > 500 else ""))
             if self.synopsis
             else "[No synopsis available.]",

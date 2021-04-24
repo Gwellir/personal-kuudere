@@ -66,7 +66,7 @@ session = br.session
 
 rels_list = (
     session.query(Anime)
-    .with_entities(Anime.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.status)
+    .with_entities(Anime.mal_aid, Anime.title, Anime.show_type, Anime.episodes, Anime.status)
     .all()
 )
 mal_dict = {item[0]: (item[1], item[2], item[3], item[4]) for item in rels_list}

@@ -337,7 +337,7 @@ class ListImporter:
                     or anime["airing_start"][:10] != str(stored_entry.started_at)[:10]
                 )
             )
-            or anime["episodes"] != stored_entry.eps
+            or anime["episodes"] != stored_entry.episodes
             or anime["score"] != stored_entry.score
             or stored_entry.status == "Currently Airing"
             or stored_entry.status == "Not yet aired"
