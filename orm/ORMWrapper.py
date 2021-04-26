@@ -315,6 +315,15 @@ class AnimeXSynonyms(Base):
     anime = relationship("Anime")
 
 
+class AnimeXSeasons(Base):
+    __tablename__ = "anime_x_seasons"
+
+    mal_aid = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True, primary_key=True)
+    season = Column(String(20), primary_key=True, index=True)
+
+    anime = relationship("Anime")
+
+
 class TorrentFiles(Base):
     __tablename__ = "torrent_files"
     __table_args__ = (

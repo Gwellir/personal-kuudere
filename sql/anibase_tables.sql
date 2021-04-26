@@ -274,3 +274,14 @@ CREATE TABLE users_x_tracked (
 	INDEX anime_idx(mal_aid),
 	INDEX group_idx(a_group)
 );
+
+DROP TABLE IF EXISTS anime_x_seasons;
+CREATE TABLE anime_x_seasons (
+	mal_aid BIGINT UNSIGNED NOT NULL,
+	season VARCHAR(20) NOT NULL,
+	
+	PRIMARY KEY (mal_aid, season),
+	FOREIGN KEY (mal_aid) REFERENCES anime(mal_aid),
+	INDEX id_idx(mal_aid),
+	INDEX season_idx(season)
+)

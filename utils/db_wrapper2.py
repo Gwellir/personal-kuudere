@@ -741,6 +741,15 @@ class DataInterface:
 
         return result
 
+    def select_all_anime_ids(self,):
+        session = self.br.get_session()
+        result = (
+            session.query(Anime)
+            .with_entities(Anime.mal_aid)
+        )
+        session.close()
+        return result
+
     # @staticmethod
     def select_anime_id_is_in_database(self, mal_aid, session):
         result = (
@@ -866,6 +875,12 @@ class DataInterface:
         session.commit()
         session.close()
 
+    def update_seasonal_data(self, cross_data, season_name, session):
+        session.query(AnimeXSeasons).filter(AnimeXSeasons.season == season_name).delete()
+        for item in cross_data:
+            anime_season_entry = AnimeXSeasons(**item)
+            session.add(anime_season_entry)
+
     # todo this is some serious fuckery right here
     def upsert_anime_entry(self, a_entry, session):
         local_entry = self.select_anime_by_id(a_entry.mal_id, sess=session).first()
@@ -881,8 +896,8 @@ class DataInterface:
                 if a_entry.aired["from"]
                 else None,
                 ended_at=a_entry.aired["to"][:10] if a_entry.aired["to"] else None,
-                eps=a_entry.episodes,
-                img_url=a_entry.image_url,
+                episodes=a_entry.episodes,
+                image_url=a_entry.image_url,
                 score=a_entry.score,
                 status=a_entry.status,
                 background=a_entry.background,

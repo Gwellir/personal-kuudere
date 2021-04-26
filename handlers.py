@@ -261,6 +261,7 @@ class UtilityFunctions:
                 self.get_anime_by_aid(mal_info[0][0])
             else:
                 return None
+        # updates entries older than two weeks upon user`s request
         elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
             result = self.get_anime_by_aid(mal_info[0][0])
             mal_info[0] = (

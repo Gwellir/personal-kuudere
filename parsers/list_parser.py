@@ -14,6 +14,7 @@ import config
 from entity_data import AnimeEntry
 from utils.anime_synonyms import Synonyms
 from utils.db_wrapper2 import BaseRelations, DataInterface
+from handlers import UtilityFunctions
 
 PAGE_SIZE = 300
 API_ERROR_LIMIT = 20
@@ -87,6 +88,7 @@ class ListImporter:
             self.br = BaseRelations()
             self.di = DataInterface(self.br)
             self.synonyms = Synonyms(self.di)
+        self.uf = UtilityFunctions(self.jikan, self.di)
 
     # call this
     def update_all(self):
@@ -95,21 +97,22 @@ class ListImporter:
 
     def get_anime_season_mal(self, y=None, s=None, later=False, shift=0):
         if later:
-            sa = self.jikan.season_later()
-        elif shift != 0:
-            shifted_month = datetime.now().month + shift * 3
-            season = MONTH_TO_SEASON[(12 + shifted_month % 12) % 12]
-            year = datetime.now().year + (shifted_month - 1) // 12
-            sa = self.jikan.season(year=year, season=season)
-        elif not y and not s:
-            sa = self.jikan.season(
-                year=datetime.now().year, season=MONTH_TO_SEASON[datetime.now().month]
-            )
+            seasonal_anime_response = self.jikan.season_later()
         else:
-            sa = self.jikan.season(year=y, season=s)
-        sa_fs = sa["anime"]
-        print(len(sa_fs))
-        for item in sa_fs:
+            if shift != 0:
+                shifted_month = datetime.now().month + shift * 3
+                season = MONTH_TO_SEASON[(12 + shifted_month % 12) % 12]
+                year = datetime.now().year + (shifted_month - 1) // 12
+            elif not y and not s:
+                year = datetime.now().year
+                season = MONTH_TO_SEASON[datetime.now().month]
+            else:
+                year = y
+                season = s
+            seasonal_anime_response = self.jikan.season(year=year, season=season)
+        seasonal_anime = seasonal_anime_response["anime"]
+        print(len(seasonal_anime))
+        for item in seasonal_anime:
             print(
                 f"{item['mal_id']:>5}",
                 item["airing_start"][:10] if item["airing_start"] else None,
@@ -117,7 +120,9 @@ class ListImporter:
                 item["score"],
                 item["title"],
             )
-        return sa_fs
+
+        season_name = None if later else f'{season} {year}'.capitalize()
+        return seasonal_anime, season_name
 
     def format_anilist_response(self, answer):
         page_info = answer["data"]["Page"]["mediaList"]
@@ -271,7 +276,17 @@ class ListImporter:
                 self.di.delete_list_by_user_id(user["user_id"])
             elif not alist:
                 return False
+            self.check_anime_table_has_anime(alist)
+
             self.di.insert_new_animelist(user["user_id"], alist)
+
+    def check_anime_table_has_anime(self, alist):
+        anime_ids = set([anime['mal_id'] for anime in alist])
+        all_ids = set([e[0] for e in self.di.select_all_anime_ids().all()])
+        missing = anime_ids - all_ids
+        for anime in missing:
+            self.uf.get_anime_by_aid(anime['mal_id'])
+            sleep(config.jikan_delay)
 
     def update_ani_list_status(self):
         userlist_ani = self.di.select_service_users_ids("Anilist").all()
@@ -298,24 +313,28 @@ class ListImporter:
                 self.di.delete_list_by_user_id(user_id)
             elif not alist:
                 return False
+            self.check_anime_table_has_anime(alist)
+
             self.di.insert_new_animelist(user_id, alist)
 
     def update_seasonal(self):
-        curr_season = self.get_anime_season_mal()
+        curr_season, season_name = self.get_anime_season_mal()
         sleep(config.jikan_delay)
-        self.base_update(curr_season)
-        prev_season = self.get_anime_season_mal(shift=-1)
+        self.base_update(curr_season, season_name)
+
+        prev_season, season_name = self.get_anime_season_mal(shift=-1)
         sleep(config.jikan_delay)
-        self.base_update(prev_season)
-        next_season = self.get_anime_season_mal(shift=1)
+        self.base_update(prev_season, season_name)
+
+        next_season, season_name = self.get_anime_season_mal(shift=1)
         sleep(config.jikan_delay)
-        self.base_update(next_season)
+        self.base_update(next_season, season_name)
         # next_2_season = self.get_anime_season_mal(shift=2)
         # sleep(config.jikan_delay)
         # self.base_update(next_2_season)
 
-        later_season = self.get_anime_season_mal(later=True)
-        self.base_update(later_season)
+        later_season, season_name = self.get_anime_season_mal(later=True)
+        self.base_update(later_season, None)
         self.synonyms.extract_synonyms()
 
     def has_changed(self, anime, session):
@@ -346,7 +365,7 @@ class ListImporter:
         else:
             return False
 
-    def base_update(self, anime_list):
+    def base_update(self, anime_list, season_name):
         genre_list = [g[0] for g in self.di.select_genres().all()]
         licensor_list = [lic[0].lower() for lic in self.di.select_licensors().all()]
         producer_list = [p[0] for p in self.di.select_producers().all()]
@@ -410,6 +429,15 @@ class ListImporter:
                 self.di.insert_new_axp(anime, session)
                 self.di.insert_new_axl(anime, session)
             # sleep(2)
+        if season_name:
+            cross_data = [
+                {
+                    'mal_aid': anime['mal_id'],
+                    'season': season_name,
+                }
+                for anime in anime_list
+            ]
+            self.di.update_seasonal_data(cross_data, season_name, session)
         session.commit()
         session.close()
 
