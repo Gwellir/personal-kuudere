@@ -799,11 +799,27 @@ class DataInterface:
         return result
 
     # @staticmethod
-    def select_titles_pending_for_delivery(
-        self,
-    ):
+    def select_titles_pending_for_delivery(self):
         session = self.br.get_session()
         result = session.query(v_pending_delivery)
+        session.close()
+
+        return result
+
+    def select_extended_user_stats(self, season):
+        session = self.br.get_session()
+        result = (
+            session.query(
+                v_extended_user_stats.c.mal_aid,
+                v_extended_user_stats.c.season,
+                v_extended_user_stats.c.title,
+                v_extended_user_stats.c.tg_nick,
+                func.min(v_extended_user_stats.c.status),
+                func.min(v_extended_user_stats.c.watched),
+            )
+            .group_by(v_extended_user_stats.c.mal_aid, v_extended_user_stats.c.tg_nick)
+            .filter(v_extended_user_stats.c.season == season)
+        )
         session.close()
 
         return result
@@ -950,7 +966,6 @@ class DataInterface:
             local_entry.related = a_entry.related
             local_entry.opening_themes = a_entry.opening_themes
             local_entry.title_synonyms = a_entry.title_synonyms
-        local_entry.synced = datetime.now()
         session.commit()
 
     # @staticmethod

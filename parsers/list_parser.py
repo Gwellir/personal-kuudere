@@ -12,6 +12,7 @@ from jikanpy import Jikan, exceptions
 
 import config
 from entity_data import AnimeEntry
+from utils.seasons import get_season_from_date
 from utils.anime_synonyms import Synonyms
 from utils.db_wrapper2 import BaseRelations, DataInterface
 from handlers import UtilityFunctions
@@ -94,6 +95,28 @@ class ListImporter:
     def update_all(self):
         self.update_ani_list_status()
         self.update_mal_list_status()
+        self.save_season_stats_as_json()
+
+    def save_season_stats_as_json(self):
+        season_name = get_season_from_date(datetime.now())
+        user_stats = self.di.select_extended_user_stats(season_name).all()
+        stats_dict = {
+            'updated': str(datetime.now().astimezone()),
+            'season': season_name,
+            'data': [
+                {
+                    'anime_id': e[0],
+                    'title': e[2],
+                    'tg_nick': e[3],
+                    'status': e[4],
+                    'watched': e[5],
+                }
+                for e in user_stats
+            ]
+        }
+
+        with open(config.season_stats_file, 'w') as f:
+            simplejson.dump(stats_dict, f)
 
     def get_anime_season_mal(self, y=None, s=None, later=False, shift=0):
         if later:
@@ -284,8 +307,8 @@ class ListImporter:
         anime_ids = set([anime['mal_id'] for anime in alist])
         all_ids = set([e[0] for e in self.di.select_all_anime_ids().all()])
         missing = anime_ids - all_ids
-        for anime in missing:
-            self.uf.get_anime_by_aid(anime['mal_id'])
+        for anime_id in missing:
+            self.uf.get_anime_by_aid(anime_id)
             sleep(config.jikan_delay)
 
     def update_ani_list_status(self):
@@ -444,7 +467,8 @@ class ListImporter:
 
 if __name__ == "__main__":
     li = ListImporter(None, None, None, autistic=True)
-    li.update_mal_list_status("DrumBox")
+    # li.update_mal_list_status("DrumBox")
     # li.update_all()
     # li.get_anime_season_mal()
     # li.update_seasonal()
+    li.save_season_stats_as_json()

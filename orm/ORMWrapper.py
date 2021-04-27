@@ -1,4 +1,5 @@
 # from pprint import pprint
+from datetime import datetime
 from time import sleep
 from typing import List, Optional
 
@@ -96,7 +97,7 @@ class Anime(Base):
     producers = relationship("Producers", secondary="anime_x_producers")
     studios = relationship("Studios", secondary="anime_x_studios")
 
-    synced = Column(DateTime, default=now)
+    synced = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     def __repr__(self):
         return f"<b>Title</b>: %s\n<b>Type</b>: %s\n<b>Status</b>: %s\n<b>Episodes</b>: %s\n<b>Aired</b>: %s to %s\n" f"<b>Score</b>: %s\n<a href='%s'>***</a>\n%s\n\n<b><a href='https://myanimelist.net/anime/%s'>MAL Page</a></b>" % (
@@ -462,4 +463,15 @@ v_pending_delivery = Table(
     Column("id", BIGINT(20), server_default=text("'0'")),
     Column("a_group", String(50)),
     Column("res", INTEGER(11)),
+)
+
+v_extended_user_stats = Table(
+    "extended_user_stats",
+    metadata,
+    Column("mal_aid", BIGINT(20)),
+    Column("season", String(20)),
+    Column("title", String(255)),
+    Column("tg_nick", String(50)),
+    Column("status", SMALLINT(5)),
+    Column("watched", BIGINT(20)),
 )
