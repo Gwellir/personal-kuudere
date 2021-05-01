@@ -12,7 +12,7 @@ from jikanpy import Jikan, exceptions
 
 import config
 from entity_data import AnimeEntry
-from utils.seasons import get_season_from_date
+from utils.exporter import ListExtractor
 from utils.anime_synonyms import Synonyms
 from utils.db_wrapper2 import BaseRelations, DataInterface
 from handlers import UtilityFunctions
@@ -95,28 +95,7 @@ class ListImporter:
     def update_all(self):
         self.update_ani_list_status()
         self.update_mal_list_status()
-        self.save_season_stats_as_json()
-
-    def save_season_stats_as_json(self):
-        season_name = get_season_from_date(datetime.now())
-        user_stats = self.di.select_extended_user_stats(season_name).all()
-        stats_dict = {
-            'updated': str(datetime.now().astimezone()),
-            'season': season_name,
-            'data': [
-                {
-                    'anime_id': e[0],
-                    'title': e[2],
-                    'tg_nick': e[3],
-                    'status': e[4],
-                    'watched': e[5],
-                }
-                for e in user_stats
-            ]
-        }
-
-        with open(config.season_stats_file, 'w') as f:
-            simplejson.dump(stats_dict, f)
+        ListExtractor(self.br, self.di).save_season_stats_as_json()
 
     def get_anime_season_mal(self, y=None, s=None, later=False, shift=0):
         if later:
@@ -144,7 +123,7 @@ class ListImporter:
                 item["title"],
             )
 
-        season_name = None if later else f'{season} {year}'.capitalize()
+        season_name = None if later else f"{season} {year}".capitalize()
         return seasonal_anime, season_name
 
     def format_anilist_response(self, answer):
@@ -165,9 +144,7 @@ class ListImporter:
             {
                 "mal_id": item["media"]["idMal"],
                 "title": item["media"]["title"]["romaji"],
-                "type": item["media"]["format"]
-                if item["media"]["format"] != "TV_SHORT"
-                else "TV",
+                "type": item["media"]["format"] if item["media"]["format"] != "TV_SHORT" else "TV",
                 "watching_status": user_status_dict[item["status"]],
                 "watched_episodes": item["progress"],
                 "total_episodes": item["media"]["episodes"],
@@ -192,9 +169,7 @@ class ListImporter:
                     "perPage": 50,
                 }
                 try:
-                    response = requests.post(
-                        AL_URL, json={"query": AL_LIST_QUERY, "variables": variables}
-                    )
+                    response = requests.post(AL_URL, json={"query": AL_LIST_QUERY, "variables": variables})
                     answer = response.json()
                     sleep(1)
                     print(curr_page, err_count)
@@ -245,9 +220,7 @@ class ListImporter:
                 except exceptions.APIException:
                     err_count += 1
                     wait_s = config.jikan_delay * err_count
-                    print(
-                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                    )
+                    print(f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds...")
                     sleep(wait_s)
                     continue
                 curr_page += 1
@@ -283,16 +256,12 @@ class ListImporter:
                 except exceptions.APIException:
                     err_count += 1
                     wait_s = config.jikan_delay * err_count
-                    print(
-                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                    )
+                    print(f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds...")
                     sleep(wait_s)
                     continue
             print(user["username"], "-> got profile data")
             if not user_entry[1]:
-                self.di.update_users_service_id_for_service_nick(
-                    user["user_id"], user["username"]
-                )
+                self.di.update_users_service_id_for_service_nick(user["user_id"], user["username"])
             alist = self.get_animelist_mal(user)
             have_user = self.di.select_user_is_in_list_status(user["user_id"]).first()
             if alist and have_user:
@@ -304,7 +273,7 @@ class ListImporter:
             self.di.insert_new_animelist(user["user_id"], alist)
 
     def check_anime_table_has_anime(self, alist):
-        anime_ids = set([anime['mal_id'] for anime in alist])
+        anime_ids = set([anime["mal_id"] for anime in alist])
         all_ids = set([e[0] for e in self.di.select_all_anime_ids().all()])
         missing = anime_ids - all_ids
         for anime_id in missing:
@@ -319,9 +288,7 @@ class ListImporter:
                 variables = {
                     "name": user_entry[0],
                 }
-                response = requests.post(
-                    AL_URL, json={"query": AL_USER_QUERY, "variables": variables}
-                )
+                response = requests.post(AL_URL, json={"query": AL_USER_QUERY, "variables": variables})
                 answer = response.json()
                 user_id = answer["data"]["User"]["id"]
                 print(user_id)
@@ -374,10 +341,7 @@ class ListImporter:
             or anime["type"] != stored_entry.show_type
             or (
                 anime["airing_start"]
-                and (
-                    not stored_entry.started_at
-                    or anime["airing_start"][:10] != str(stored_entry.started_at)[:10]
-                )
+                and (not stored_entry.started_at or anime["airing_start"][:10] != str(stored_entry.started_at)[:10])
             )
             or anime["episodes"] != stored_entry.episodes
             or anime["score"] != stored_entry.score
@@ -397,28 +361,16 @@ class ListImporter:
         for anime in anime_list:
             print(f'> {anime["title"]}')
             if anime["genres"]:
-                new_genres = [
-                    genre
-                    for genre in anime["genres"]
-                    if genre["mal_id"] not in genre_list
-                ]
+                new_genres = [genre for genre in anime["genres"] if genre["mal_id"] not in genre_list]
                 self.di.insert_new_genres(new_genres, session)
                 genre_list.extend([genre["mal_id"] for genre in new_genres])
             if anime["licensors"]:
-                new_licensors = [
-                    licensor
-                    for licensor in anime["licensors"]
-                    if licensor.lower() not in licensor_list
-                ]
+                new_licensors = [licensor for licensor in anime["licensors"] if licensor.lower() not in licensor_list]
                 print(new_licensors)
                 self.di.insert_new_licensors(new_licensors, session)
                 licensor_list.extend([licensor["name"] for licensor in new_licensors])
             if anime["producers"]:
-                new_producers = [
-                    producer
-                    for producer in anime["producers"]
-                    if producer["mal_id"] not in producer_list
-                ]
+                new_producers = [producer for producer in anime["producers"] if producer["mal_id"] not in producer_list]
                 print(new_producers)
                 self.di.insert_new_producers(new_producers, session)
                 producer_list.extend([producer["mal_id"] for producer in new_producers])
@@ -438,9 +390,7 @@ class ListImporter:
                     ):
                         err_count += 1
                         wait_s = config.jikan_delay * err_count
-                        print(
-                            f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                        )
+                        print(f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds...")
                         sleep(wait_s)
                         continue
                 # sleep(config.jikan_delay)
@@ -455,8 +405,8 @@ class ListImporter:
         if season_name:
             cross_data = [
                 {
-                    'mal_aid': anime['mal_id'],
-                    'season': season_name,
+                    "mal_aid": anime["mal_id"],
+                    "season": season_name,
                 }
                 for anime in anime_list
             ]
@@ -471,4 +421,5 @@ if __name__ == "__main__":
     # li.update_all()
     # li.get_anime_season_mal()
     # li.update_seasonal()
-    li.save_season_stats_as_json()
+    br = BaseRelations()
+    ListExtractor(br, DataInterface(br)).save_season_stats_as_json()
