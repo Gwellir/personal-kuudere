@@ -20,25 +20,28 @@ MONTH_TO_SEASON = {
 }
 
 
-def get_season_from_date(date: datetime, is_end_date: bool = False) -> str:
+def get_season_from_date(
+    date: datetime, for_show: bool = False, is_end_date: bool = False
+) -> str:
     year = date.year
     month = date.month
-    if not is_end_date:
-        if month % 3 == 0 and date.day > 15:
-            month += 1
-        if month > 12:
-            year += 1
-    else:
-        if month % 3 == 1 and date.day < 15:
-            month -= 1
-        if month < 1:
-            year -= 1
+    if for_show:
+        if not is_end_date:
+            if month % 3 == 0 and date.day > 15:
+                month += 1
+            if month > 12:
+                year += 1
+        else:
+            if month % 3 == 1 and date.day < 15:
+                month -= 1
+            if month < 1:
+                year -= 1
     season = MONTH_TO_SEASON[month]
 
     return f"{season} {year}"
 
 
-def get_season_interval(season_str: str) -> list:
+def get_season_interval(season_str: str, end_season: str) -> list:
     NEXT_SEASON = {
         "fall": "winter",
         "winter": "spring",
@@ -54,13 +57,15 @@ def get_season_interval(season_str: str) -> list:
             year += 1
         season_str = f"{season} {year}"
         yield season_str
+        if season_str == end_season:
+            break
 
 
 def get_actual_seasons(anime: Anime) -> list:
     if anime.premiered:
         start_season = anime.premiered.lower()
     elif anime.started_at:
-        start_season = get_season_from_date(anime.started_at)
+        start_season = get_season_from_date(anime.started_at, for_show=True)
     else:
         return []
     if anime.show_type == "TV" and anime.status == "Finished Airing":
@@ -82,11 +87,9 @@ def get_actual_seasons(anime: Anime) -> list:
     else:
         return []
 
-    end_season = get_season_from_date(end_date, is_end_date=True)
+    end_season = get_season_from_date(end_date, for_show=True, is_end_date=True)
     interval = [start_season]
-    for season_str in get_season_interval(start_season):
+    for season_str in get_season_interval(start_season, end_season):
         interval.append(season_str)
-        if season_str == end_season:
-            break
 
     return interval

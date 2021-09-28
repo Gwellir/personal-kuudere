@@ -32,7 +32,7 @@ def get_handler_filters(handler: dict):
         if not handler.get("private", False):
             chats = handler.get("chats", [])
             if not handler.get("no_main", False):
-                chats.append(config.gacha_chat)
+                chats.append(config.main_chat)
             filters = filters | Filters.chat(chats)
 
     return filters
@@ -63,8 +63,7 @@ filter_type_dict = {
     "unknown": Filters.command,
 }
 
-# feeding handlers for commands and processable message types to
-# dispatcher while applying restrictions
+# feeding handlers for commands and processable message types to dispatcher while applying restrictions
 for category in core.handlers.handlers_list:
     for handler in category:
         if "command" in handler.keys():

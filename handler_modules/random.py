@@ -57,10 +57,12 @@ class AnimeSelector(Handler):
     def _parse_random_command(self, opts):
         parser = argparse.ArgumentParser(
             description="Get random anime from stored userlists.",
+            add_help=False,
             # exit_on_error=False,
         )
         group_score = parser.add_argument_group()
         group_score.add_argument("-s", "--score", nargs="+", type=int)
+        parser.add_argument("-?", "--help", action="store_true")
         parser.add_argument("-u", "--users", nargs="+")
         parser.add_argument("-t", "--types", nargs="+")
         parser.add_argument("-g", "--genres", nargs="+")
@@ -172,6 +174,8 @@ class AnimeSelector(Handler):
         return query
 
     def process(self, params):
+        if params.help:
+            return None
         # anime_id_list = [entry[0] for entry in self.query.with_entities(Anime.mal_aid).all()]
         self.query = (
             self.session.query(ListStatus)
@@ -215,7 +219,20 @@ class AnimeSelector(Handler):
 
     def answer(self, result):
         entry = rand_choice(result) if result else None
-        if self.own_list:
+        if self.params.help:
+            msg = (
+                "Выбор случайного аниме из списков пользователей:\n\n"
+                "Формат: <code>/random [-param value(s)] ...</code>\n"
+                "Поддерживаются параметры:\n"
+                "<code>-t type1[ type2 ...]</code> - типы аниме (movie, TV, OVA...)\n"
+                "<code>-r X [Y]</code> - оценка на MAL от Х до Х [до Y]\n"
+                "<code>-g genre1[ genre2 ...]</code> - набор интересующих жанров\n"
+                "<i>(Следующие параметры запускают поиск в чужих списках):</i>\n"
+                "<code>-s X [Y]</code> - оценка (другого пользователя) от X до Х [до Y]\n"
+                "<code>-u user1[ user2 ...]</code> - имена пользователей, из списков которых делается выборка\n"
+                "<code>-c cond1[ cond2 ...]</code> - интересующие состояния просмотра (hold, ongoing, drop...)"
+            )
+        elif self.own_list:
             msg = "Случайное аниме из PTW:\n\n"
             msg += (
                 f'<a href="https://myanimelist.net/anime/{entry.mal_aid}">{entry.title}</a>'

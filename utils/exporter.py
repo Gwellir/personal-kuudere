@@ -4,7 +4,7 @@ from pprint import pprint
 import simplejson
 
 import config
-from orm.ORMWrapper import ListStatus, Users, Anime, UsersXTracked, AnimeXSeasons
+from orm.ORMWrapper import Anime, AnimeXSeasons, ListStatus, Users, UsersXTracked
 from utils.seasons import get_season_from_date
 
 
@@ -54,6 +54,7 @@ class ListExtractor:
                 Anime.show_type,
                 Users.tg_nick,
                 UsersXTracked.last_ep,
+                UsersXTracked.dropped,
             )
         )
         session.close()
@@ -61,16 +62,21 @@ class ListExtractor:
         return result
 
     def get_merged_season_tracking(self, season_name):
-        import_tracking = self._select_full_tracking_for_imports().filter_by(season=season_name).all()
-        bot_tracking = self._select_full_tracking_for_bot().filter_by(season=season_name).all()
+        import_tracking = (
+            self._select_full_tracking_for_imports().filter_by(season=season_name).all()
+        )
+        bot_tracking = (
+            self._select_full_tracking_for_bot().filter_by(season=season_name).all()
+        )
         pprint(import_tracking)
         pprint(bot_tracking)
         tracking_data = {}
         title_data = {}
         for entry in bot_tracking:
             tracking_data[entry[0], entry[7]] = {
-                "status": 1,
-                "watched": entry[8],
+                "status": 4 if entry[9] else 1,
+                "watched": entry[8] if entry[9] else 0,
+                # "watched": 0,
             }
             title_data[entry[0]] = {
                 "title": entry[2],

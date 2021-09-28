@@ -332,7 +332,7 @@ class TorrentFeedParser:
                     # todo sometimes a double can make it here despite synonym check
                     self.di.insert_new_synonym(mal_id, a_title)
             else:
-                pass
+                mal_id = mal_id[0]
             self.di.update_anifeeds_with_parsed_information(
                 mal_id,
                 a_group,

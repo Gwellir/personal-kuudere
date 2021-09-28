@@ -131,9 +131,9 @@ class Nominate(Handler):
                 anime
                 for anime in char.anime
                 if anime.premiered
-                   and anime.premiered.lower() != voting.season
-                   and anime.show_type in ["TV", "OVA", "ONA"]
-                   and anime.episodes > 3
+                and anime.premiered.lower() != voting.season
+                and anime.show_type in ["TV", "OVA", "ONA"]
+                and anime.episodes > 3
             ]
             if not legit_sources:
                 raise NoLegitAnimeError

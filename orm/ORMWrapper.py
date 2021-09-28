@@ -31,6 +31,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.functions import now
 
 # from datetime import datetime
@@ -43,7 +44,11 @@ metadata = Base.metadata
 class BaseRelations:
     def __init__(self):
         self._engine = create_engine(
-            config.DB.db_url, echo=True, pool_pre_ping=True, pool_recycle=3600
+            config.DB.db_url,
+            echo=True,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            poolclass=NullPool,
         )
 
         self._SessionFactory = sessionmaker(bind=self._engine)
@@ -289,6 +294,7 @@ class Users(Base):
     mal_uid = Column(BIGINT(20), unique=True)
     preferred_res = Column(INTEGER(11), nullable=False, server_default=text("'720'"))
     service = Column(Enum("MAL", "Anilist", "Other"))
+    send_torrents = Column(TINYINT(1), index=True, nullable=False, default=True)
 
 
 class UsersXTracked(Base):
@@ -302,6 +308,7 @@ class UsersXTracked(Base):
     )
     last_ep = Column(INTEGER(10), server_default=text("'0'"))
     a_group = Column(String(50), index=True)
+    dropped = Column(TINYINT(1), index=True, server_default=text("'0'"))
 
     anime = relationship("Anime")
     users = relationship("Users")
@@ -319,7 +326,9 @@ class AnimeXSynonyms(Base):
 class AnimeXSeasons(Base):
     __tablename__ = "anime_x_seasons"
 
-    mal_aid = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True, primary_key=True)
+    mal_aid = Column(
+        ForeignKey("anime.mal_aid"), nullable=False, index=True, primary_key=True
+    )
     season = Column(String(20), primary_key=True, index=True)
 
     anime = relationship("Anime")
@@ -440,6 +449,7 @@ v_last_episodes = Table(
     Column("id", BIGINT(20), server_default=text("'0'")),
     Column("a_group", String(50)),
     Column("res", INTEGER(11)),
+    Column("send_torrents", TINYINT(1)),
 )
 
 
@@ -463,6 +473,7 @@ v_pending_delivery = Table(
     Column("id", BIGINT(20), server_default=text("'0'")),
     Column("a_group", String(50)),
     Column("res", INTEGER(11)),
+    Column("send_torrents", TINYINT(1)),
 )
 
 v_extended_user_stats = Table(

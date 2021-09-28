@@ -25,6 +25,7 @@ from telegram import (
     ParseMode,
 )
 from telegram.utils.helpers import mention_html
+from torrentool.torrent import Torrent
 
 import config
 
@@ -128,21 +129,30 @@ class UtilityFunctions:
 
     def get_anime_by_aid(self, mal_aid):
         local_result = self.di.select_anime_by_id(mal_aid).first()
-        if (
-            not local_result
-            or not local_result.popularity
-            or datetime.now() - local_result.synced > timedelta(days=14)
-        ):
+        answer = (
+            {
+                "mal_id": local_result.mal_aid,
+                "title": local_result.title,
+                "airing": local_result.status == "Currently Airing",
+                "type": local_result.show_type,
+                "members": local_result.members,
+            }
+            if local_result
+            else None
+        )
+        if not local_result or not local_result.popularity:
+            # or datetime.now() - local_result.synced > timedelta(days=14):
             try:
                 anime = self.jikan.anime(mal_aid)
                 output = AnimeEntry(**anime)
                 self.store_anime(output)
+                output = output._asdict()
             except APIException as e:
                 print(e.args)
-                output = None
+                output = answer
             # sleep(config.jikan_delay)
         else:
-            output = local_result
+            output = answer
         return output
 
     def get_anime_info(self, query):
@@ -265,11 +275,11 @@ class UtilityFunctions:
         elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
             result = self.get_anime_by_aid(mal_info[0][0])
             mal_info[0] = (
-                result.mal_id,
-                result.title,
-                result.airing,
-                result.type,
-                result.members,
+                result["mal_id"],
+                result["title"],
+                result["airing"],
+                result["type"],
+                result["members"],
             )
         else:
             # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
@@ -285,7 +295,6 @@ class UtilityFunctions:
 
         starts = []
         for entry in self.di.select_relations_data().all():
-            # pprint(entry)
             self.relations[entry[0]] = {}
             self.relations[entry[0]]["title"] = entry[2]
             for key in entry[1]:
@@ -359,7 +368,7 @@ class HandlersStructure:
                 {"command": ["gif_tag"], "function": self.gif_tags},
                 {"command": ["set_q"], "function": self.quote_set},
                 {"command": ["what", "quote"], "function": self.quotes},
-                {"command": ["torrents"], "function": self.torrents_stats},
+                {"command": ["torrents", "ongoings"], "function": self.torrents_stats},
                 {"command": ["stats"], "function": self.show_stats},
                 {"command": ["lockout"], "function": self.show_lockouts},
                 {"command": ["future"], "function": self.show_awaited},
@@ -387,7 +396,16 @@ class HandlersStructure:
                 },
                 {"command": ["track"], "function": self.track_anime, "private": True},
                 {"command": ["drop"], "function": self.drop_anime, "private": True},
-                {"command": ["digest"], "function": self.show_digest, "private": True},
+                {
+                    "command": ["digest", "today"],
+                    "function": self.show_digest,
+                    "private": True,
+                },
+                {
+                    "command": ["toggle_torrents", "toggle_delivery"],
+                    "function": self.toggle_torrents,
+                    "private": True,
+                },
                 {"message": "photo", "function": self.ask_saucenao, "private": True},
                 # this prevents the bot from replying to a gif with unauthed handler
                 {"message": "gif", "function": self.do_nothing, "private": True},
@@ -835,22 +853,25 @@ class HandlersStructure:
     # todo make sure old callbacks do not fuck shit up
     # todo return more info in case when title part matches more than one title
     def track_anime(self, update, context):
-        user_id = self.di.select_user_id_by_tg_id(update.effective_user.id).first()
+        user = self.di.select_user_entry_by_tg_id(update.effective_user.id).first()
+        user_id = user.id
         if not user_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Вы не зарегистрированы на боте, используйте /register в моём привате",
             )
             return
-        else:
-            user_id = user_id[0]
         if not context.args:
             tracked = self.di.select_tracked_titles_by_user_tg_id(
                 update.effective_user.id
             ).all()
             if tracked:
+                if not user.send_torrents:
+                    msg = "<b>Вы отказались от получения торрент-файлов!</b>\n"
+                else:
+                    msg = ""
                 tracked.sort(key=lambda item: item[1])
-                msg = "Ваши подписки:\n\n" + "\n".join([entry[1] for entry in tracked])
+                msg += "Ваши подписки:\n\n" + "\n".join([entry[1] for entry in tracked])
                 button_list = [
                     InlineKeyboardButton(
                         f"[{entry[2]}] {entry[1]}",
@@ -863,6 +884,7 @@ class HandlersStructure:
                     chat_id=update.effective_chat.id,
                     text=msg + "\n\nКнопки ниже управляют выбором группы сабберов.",
                     reply_markup=reply_markup,
+                    parse_mode=ParseMode.HTML,
                 )
             else:
                 msg = "У вас нет подписок!"
@@ -925,14 +947,14 @@ class HandlersStructure:
 
     def drop_anime(self, update, context):
         q = [entry.strip() for entry in " ".join(context.args).split(",")]
-        user_id = self.di.select_user_id_by_tg_id(update.effective_user.id).first()
+        user = self.di.select_user_entry_by_tg_id(update.effective_user.id).first()
+        user_id = user.id
         if not user_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Вы не зарегистрированы на боте, используйте /register в моём привате",
             )
             return
-        user_id = user_id.id
         unsubbed_list = []
         for title in q:
             local_result = self.di.select_anime_tracked_by_user_id_and_title(
@@ -956,6 +978,15 @@ class HandlersStructure:
                 text="В заданном списке не найдено аниме из ваших подписок.",
             )
 
+    def toggle_torrents(self, update, context):
+        current_status = self.di.switch_torrent_delivery(update.effective_user.id)
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Вы включили доставку торрент-файлов."
+            if current_status
+            else "Вы отключили доставку торрент-файлов.",
+        )
+
     def show_anime(self, update, context):
         if not context.args:
             return
@@ -975,6 +1006,9 @@ class HandlersStructure:
     @staticmethod
     def convert_webp(update, context):
         sticker = update.effective_message.sticker
+        reply_to = None
+        if update.effective_message.reply_to_message:
+            reply_to = update.effective_message.reply_to_message.message_id
         if not sticker.emoji:
             filename = f"img/{sticker.file_unique_id}.jpg"
             if not os.path.exists(filename):
@@ -996,9 +1030,12 @@ class HandlersStructure:
                 bg.close()
                 wpo.close()
             converted = open(filename, "rb")
-            msg = f"WEBP -> JPEG от {update.effective_user.full_name} ({update.effective_user.username})"
+            msg = f"WEBP -> JPEG от {update.effective_user.full_name}"
             context.bot.send_photo(
-                chat_id=update.effective_chat.id, caption=msg, photo=converted
+                chat_id=update.effective_chat.id,
+                caption=msg,
+                photo=converted,
+                reply_to_message_id=reply_to,
             )
             context.bot.delete_message(
                 chat_id=update.effective_chat.id,
@@ -1132,7 +1169,8 @@ class HandlersStructure:
         )
 
     def show_digest(self, update, context):
-        user_id = self.di.select_user_id_by_tg_id(update.effective_user.id).first()
+        user = self.di.select_user_entry_by_tg_id(update.effective_user.id).first()
+        user_id = user.id
         if not user_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -1245,6 +1283,7 @@ class HandlersStructure:
     def error(self, update, context):
         # add all the dev user_ids in this list. You can also add ids of channels or groups.
         devs = [config.dev_tg_id]
+        payload = trace = None
         try:
             # we want to notify the user of this problem. This will always work, but not notify users if the update is an
             # callback or inline query, or a poll update. In case you want this, keep in mind that sending the message
@@ -1293,12 +1332,14 @@ class HandlersStructure:
         entries = self.di.select_last_episodes(tg_id).all()
         for entry in entries:
             try:
-                file = open(entry.torrent, "rb")
-                self.updater.bot.send_document(
-                    chat_id=entry.tg_id,
-                    document=file,
-                    caption=entry.torrent.rsplit("/", 1)[1],
-                )
+                if entry[7]:
+                    file = open(entry.torrent, "rb")
+                    torrent = Torrent.from_file(entry.torrent)
+                    self.updater.bot.send_document(
+                        chat_id=entry.tg_id,
+                        document=file,
+                        caption=f'{entry.torrent.rsplit("/", 1)[1]}\n{torrent.magnet_link}',
+                    )
                 self.di.update_release_status_for_user_after_delivery(
                     entry.episode, entry.id, entry.mal_aid, entry.a_group
                 )

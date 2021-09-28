@@ -7,13 +7,23 @@ from Levenshtein import distance
 from orm.ORMWrapper import Anime, BaseRelations
 from utils.db_wrapper2 import DataInterface
 
-with open("../data/anime-offline-database.json", "r", encoding="utf-8") as f:
+with open("data/anime-offline-database.json", "r", encoding="utf-8") as f:
     lib = json.load(f)
 
 conv = {
     12091: 33206,  # https://myanimelist.net/anime/33206/Kobayashi-san_Chi_no_Maid_Dragon
     10729: 25099,  # https://myanimelist.net/anime/25099/Ore_ga_Ojousama_Gakkou_ni_Shomin_Sample_Toshite_Gets♥Sareta_Ken
     10041: 20709,  # Sabagebu
+    778: 324,  # Patlabor on TV
+    202: 32,  # EOE
+    8778: 11981,  # Gekijouban Mahou Shoujo Madoka Magica
+    10046: 21855,  # Hanamonogatari: Suruga Devil
+    9453: 15689,  # Nekomonogatari (Kuro): Tsubasa Family
+    9299: 14407,  # persona 3 the movie
+    193: 210,  # Ranma 1/2
+    2690: 1577,  # You're under arrest
+    10891: 28025,  # Tsukimonogatari
+    9720: 17875,  # Papa
 }
 
 # some SYD OVA OAD
@@ -45,7 +55,7 @@ for item in lib["data"]:
 
 print("\n", len(conv))
 
-tree = ET.parse("../data/ylguam.xml")
+tree = ET.parse("data/ylguam.xml")
 root = tree.getroot()
 amount = 0
 missing = []
@@ -58,15 +68,16 @@ for child in root:
 
 
 print(len(root), amount)
-# print(missing)
+print(missing)
 
-di = DataInterface()
 br = BaseRelations()
-session = br.session
+di = DataInterface(br)
+
+session = br.get_session()
 
 rels_list = (
     session.query(Anime)
-    .with_entities(Anime.mal_aid, Anime.title, Anime.show_type, Anime.episodes, Anime.status)
+    .with_entities(Anime.mal_aid, Anime.title, Anime.show_type, Anime.eps, Anime.status)
     .all()
 )
 mal_dict = {item[0]: (item[1], item[2], item[3], item[4]) for item in rels_list}
@@ -78,7 +89,7 @@ for title in missing:
     dist = 1000
     match = None
     for comp in missed_titles:
-        new_dist = distance(title[0].lower(), comp[1].lower())
+        new_dist = distance(title[0], comp[1])
         if new_dist < dist:
             dist = new_dist
             match = title, (comp[1], comp[0])
@@ -109,7 +120,7 @@ for child in root:
     try:
         id_ = conv[int(child.attrib["id"])]
     except KeyError as e:
-        print(e.args)
+        print(e.args, child.find("Name").text)
         continue
 
     vote_is_perm = False

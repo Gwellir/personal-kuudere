@@ -1,5 +1,6 @@
 from telegram import ParseMode
 from telegram.error import BadRequest
+from torrentool.api import Torrent
 
 import config
 
@@ -50,10 +51,14 @@ class BotJobs:
         entries = self.di.select_titles_pending_for_delivery().all()
         for entry in entries:
             try:
-                file = open(entry[1], "rb")
-                self.updater.bot.send_document(
-                    chat_id=entry[0], document=file, caption=entry[1].rsplit("/", 1)[1]
-                )
+                if entry[7]:
+                    file = open(entry[1], "rb")
+                    torrent = Torrent.from_file(entry[1])
+                    self.updater.bot.send_document(
+                        chat_id=entry[0],
+                        document=file,
+                        caption=f'{entry[1].rsplit("/", 1)[1]}\n{torrent.magnet_link}',
+                    )
                 self.di.update_release_status_for_user_after_delivery(
                     entry[2], entry[4], entry[3], entry[5]
                 )
