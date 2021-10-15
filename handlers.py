@@ -202,6 +202,10 @@ class UtilityFunctions:
                 title_japanese=None,
                 title_synonyms=None,
                 trailer_url=None,
+                themes=None,
+                demographics=None,
+                explicit_genres=None,
+                external_links=None,
             )
             if (
                 anime.mal_aid in self.relations
