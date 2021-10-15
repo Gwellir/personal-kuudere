@@ -327,6 +327,17 @@ class AnimeXSynonyms(Base):
     anime = relationship("Anime")
 
 
+class AnimeXContinuations(Base):
+    __tablename__ = "anime_x_continuations"
+
+    id = Column(BIGINT(20), primary_key=True, unique=True)
+    anime_id = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True)
+    sequel_id = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True)
+    episode_shift = Column(INTEGER(5), nullable=False)
+
+    sequel = relationship("Anime", foreign_keys="AnimeXContinuations.sequel_id", uselist=False)
+
+
 class AnimeXSeasons(Base):
     __tablename__ = "anime_x_seasons"
 

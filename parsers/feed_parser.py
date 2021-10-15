@@ -85,6 +85,18 @@ def get_resolution_from_tags(tags):
     return resolution
 
 
+def extract_bracketed_tags(matcher, a_title: str, delims):
+    tag_list = []
+    start, end = delims
+    matched_tags = matcher.findall(a_title)
+    if matched_tags:
+        for match in matched_tags:
+            tag_list.extend(match.split(" "))
+            a_title = a_title.replace(f"{start}{match}{end}", "").strip()
+
+    return tag_list, a_title
+
+
 def parse_feed_title(a_title):
     """
     Parses release title string.
@@ -99,20 +111,16 @@ def parse_feed_title(a_title):
     a_ext = a_ep_no = a_group = None
     group_not_found = True
     all_tags = []
-    tags_in_square = match_in_square_brackets.findall(a_title)
+    tags_in_square, a_title = extract_bracketed_tags(match_in_square_brackets, a_title, ("[", "]"))
     if tags_in_square:
         a_group = tags_in_square[0]
         group_not_found = False
-        for match in tags_in_square:
-            all_tags.extend(match.split(" "))
-            a_title = str.replace(a_title, f"[{match}]", "").strip()
-    tags_in_round = match_in_round_brackets.findall(a_title)
+    tags_in_round, a_title = extract_bracketed_tags(match_in_round_brackets, a_title, ("(", ")"))
     if tags_in_round:
         if group_not_found:
             a_group = tags_in_round[0]
-        for match in tags_in_round:
-            all_tags.extend(match.split(" "))
-            a_title = str.replace(a_title, f"({match})", "").strip()
+    all_tags.extend(tags_in_square + tags_in_round)
+
     print(f"{Fore.BLUE}{all_tags}{Style.RESET_ALL}")
     a_res = get_resolution_from_tags(all_tags)
     extension = match_extension.match(a_title)
@@ -127,7 +135,7 @@ def parse_feed_title(a_title):
             a_title += ep_number.group("season")
         a_title = match_multiple_spaces.sub(" ", a_title.strip())
     return (
-        a_ep_no,
+        int(a_ep_no) if a_ep_no else None,
         a_group[:90] if a_group else None,
         a_title,
         a_res,
@@ -255,6 +263,42 @@ class TorrentFeedParser:
         session.commit()
         session.close()
 
+    def get_mal_ongoings_by_title(self, a_title, a_ep_no):
+        mal_id = None
+        while True:
+            try:
+                search_results = self.jikan.search(
+                    "anime",
+                    a_title,
+                    page=1,
+                    parameters={
+                        "type": "tv",
+                        "status": "airing",
+                        "limit": 5,
+                        "genre": 15,
+                        "genre_exclude": 0,
+                    },
+                )
+                sleep(jikan_delay)
+                # test for legit episode numbers as MAL sometimes returns very strange title matches
+                mal_ids = [
+                    (result["mal_id"],)
+                    for result in search_results["results"]
+                    if (
+                            result["episodes"] == 0
+                            or result["episodes"] >= a_ep_no
+                    )
+                ]
+                break
+            except APIException:
+                sleep(jikan_delay)
+
+        print(f"Can't get a precise result... {mal_ids}")
+        if search_results:
+            mal_id = title_compare(search_results["results"], a_title)
+
+        return mal_id
+
     # todo batch parsing and delivery (possibly subscribe for complete seasons?)
     # todo fix parentheses adding spare spaces to recognized title name
     # todo avoid accidentally hitting SQL VARCHAR column size limits
@@ -276,9 +320,11 @@ class TorrentFeedParser:
                 f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
                 f' ext ({a_ext if a_ext else "n/a"})'
             )
-            mal_id = self.di.select_ongoing_anime_id_by_synonym(
+            mal_id, ep_shift = self.di.select_ongoing_anime_id_by_synonym(
                 a_title, session
-            ).first()
+            )
+            a_ep_no = a_ep_no - ep_shift
+            print(mal_id)
             if not mal_id:
                 mal_ids = self.di.select_mal_anime_ids_by_title_part(
                     a_title, session
@@ -287,39 +333,9 @@ class TorrentFeedParser:
                     print(mal_ids[0])
                     mal_id = mal_ids[0]
                 # elif not mal_ids:
-                # todo unify lurking and title comparision
+                # todo unify lurking and title comparison
                 else:
-                    search_results = None
-                    try:
-                        search_results = self.jikan.search(
-                            "anime",
-                            a_title,
-                            page=1,
-                            parameters={
-                                "type": "tv",
-                                "status": "airing",
-                                "limit": 5,
-                                "genre": 15,
-                                "genre_exclude": 0,
-                            },
-                        )
-                        # test for legit episode numbers as MAL sometimes returns very strange title matches
-                        mal_ids = [
-                            (result["mal_id"],)
-                            for result in search_results["results"]
-                            if (
-                                result["episodes"] == 0
-                                or result["episodes"] >= int(a_ep_no)
-                            )
-                        ]
-                    except APIException:
-                        pass
-                    sleep(jikan_delay)
-
-                    # else:
-                    print(f"Can't get a precise result... {mal_ids}")
-                    if search_results:
-                        mal_id = title_compare(search_results["results"], a_title)
+                    mal_id = self.get_mal_ongoings_by_title(a_title, a_ep_no)
                 # check whether we have title info
                 if mal_id:
                     if not self.di.select_anime_id_is_in_database(
@@ -337,12 +353,13 @@ class TorrentFeedParser:
                 mal_id,
                 a_group,
                 a_res,
-                int(a_ep_no),
+                a_ep_no,
                 file_size,
                 save_title,
                 a_date,
                 session,
             )
+            # if we have a recognized title in the end, save the torrent
             if mal_id:
                 self.torrent_save(
                     mal_id,

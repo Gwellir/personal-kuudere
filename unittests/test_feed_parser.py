@@ -6,37 +6,41 @@ from jikanpy import Jikan
 from parsers.feed_parser import TorrentFeedParser, parse_feed_title, title_compare
 from utils.db_wrapper2 import BaseRelations, DataInterface
 
-tfp = TorrentFeedParser(Jikan(), DataInterface(BaseRelations()))
+ji = Jikan()
+di = DataInterface(BaseRelations())
+tfp = TorrentFeedParser(ji, di)
 
 
 class TestFeedParser(TestCase):
     #
     # def __init__(self):
     #     super().__init__()
-    #     self.di = DataInterface()
+    #     self.di = DataInterface(BaseRelations())
     #     self.jikan = Jikan()
 
     def test_name_parsing(self):
-        title1 = "[FFA] Re:Zero kara Hajimeru Isekai Seikatsu 2nd Season - 11 [1080p][HEVC][AAC].mkv"
+        title1 = "[SubsPlease] 86 - Eighty Six - 13 (1080p) [87C492A3].mkv"
         self.assertEqual(
             (
-                "11",
-                "FFA",
-                "Re:Zero kara Hajimeru Isekai Seikatsu 2nd Season",
+                13,
+                "SubsPlease",
+                "86 - Eighty Six",
                 1080,
                 "mkv",
             ),
             parse_feed_title(title1),
         )
 
-        title2 = "	[SSA] Hataraku Saibou Black - 02 [1080p].mkv"
+        title2 = "[SubsPlease] 86 - Eighty Six - 13 (1080p) [87C492A3].mkv"
+        session = di.br.get_session()
         self.assertEqual(
-            ("11", "Judas", "Re:Zero kara Hajimeru Isekai Seikatsu - S02", 1080, "mkv"),
+            (13, "SubsPlease", "86 - Eighty Six", 1080, "mkv"),
             tfp.do_recognize(
                 title2,
                 datetime.now(),
                 "",
                 0,
+                session,
             ),
         )
 
