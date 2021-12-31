@@ -45,7 +45,7 @@ dispatcher = updater.dispatcher
 
 core = BotCore(updater)
 
-# job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=0)
+job_feeds = jobs.run_repeating(core.jobs.update_nyaa, interval=600, first=5)
 core.jobs.update_continuations(None)
 update_sequels_time = datetime.strptime("06:00 +0300", "%H:%M %z").time()
 job_update_sequels = jobs.run_daily(core.jobs.update_continuations, update_sequels_time)

@@ -401,7 +401,7 @@ class TorrentFeedParser:
         url = link
         r = requests.get(url)
         filename = (
-            f"torrents/[{group}] {title} - {episode:0>2}"
+            f"torrents/[{group}] {title}({mal_id}) - {episode:0>2}"
             + (f" [{res}p]" if res else "")
             + f" [{size} MiB].torrent"
         )

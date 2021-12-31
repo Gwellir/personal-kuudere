@@ -60,7 +60,7 @@ class BaseRelations:
 
 
 br = BaseRelations()
-jikan = jikanpy.Jikan()
+jikan = jikanpy.Jikan(**config.jikan_params)
 
 
 class Anime(Base):
@@ -334,8 +334,6 @@ class AnimeXContinuations(Base):
     anime_id = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True)
     sequel_id = Column(ForeignKey("anime.mal_aid"), nullable=False, index=True)
     episode_shift = Column(INTEGER(5), nullable=False)
-
-    sequel = relationship("Anime", foreign_keys="AnimeXContinuations.sequel_id", uselist=False)
 
 
 class AnimeXSeasons(Base):

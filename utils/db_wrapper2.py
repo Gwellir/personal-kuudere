@@ -701,9 +701,10 @@ class DataInterface:
             AnimeSequels = aliased(Anime)
             result = (
                 query
-                .join(AnimeXContinuations, Anime.mal_aid == AnimeXContinuations.anime_id)
+                .join(AnimeXContinuations, AnimeXContinuations.anime_id == Anime.mal_aid)
                 .join(AnimeSequels, AnimeSequels.mal_aid == AnimeXContinuations.sequel_id)
                 .filter(
+                    AnimeXSynonyms.synonym == synonym,
                     AnimeSequels.status != "Finished Airing",
                 )
                 .with_entities(AnimeSequels.mal_aid, AnimeXContinuations.episode_shift)
