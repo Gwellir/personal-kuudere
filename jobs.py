@@ -1,3 +1,6 @@
+import re
+
+import requests
 from telegram import ParseMode
 from telegram.error import BadRequest
 from torrentool.api import Torrent
@@ -74,3 +77,20 @@ class BotJobs:
 
     def update_seasons(self, callback):
         self.li.update_seasonal()
+
+    def update_continuations(self, callback):
+        response = requests.get("https://raw.githubusercontent.com/erengy/anime-relations/master/anime-relations.txt")
+        text_lines = response.text.split("\n")
+        data_lines = [line for line in text_lines if line.startswith("- ")]
+        entries = []
+        for entry in data_lines:
+            m = re.match(
+                r'- (?P<mal_old>\d+|\?)\|(?P<kitsu_old>\d+|\?)\|(?P<alist_old>\d+|\?):(?P<old_ep>\d+)[-0-9]*'
+                r' -> (?P<mal_new>\d+|\?)\|(?P<kitsu_new>\d+|\?)\|(?P<alist_new>\d+|\?):(?P<new_ep>\d+)[-0-9!]*',
+                entry
+            )
+            if m and m.group('mal_old') != '?':
+                ep_shift = int(m.group('old_ep')) - int(m.group('new_ep'))
+                entries.append((m.group('mal_old'), m.group('mal_new'), ep_shift))
+        if entries:
+            self.di.insert_new_sequel_data(entries)

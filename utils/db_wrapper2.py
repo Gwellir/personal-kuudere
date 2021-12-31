@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pprint import pprint
 
 from sqlalchemy import and_, desc, func, or_
+from sqlalchemy.orm import aliased
 
 from orm.ORMWrapper import *
 
@@ -681,16 +682,39 @@ class DataInterface:
 
     # @staticmethod
     def select_ongoing_anime_id_by_synonym(self, synonym, session):
-        result = (
+        query = (
             session.query(AnimeXSynonyms)
             .join(Anime)
+        )
+        result = (
+            query
             .filter(
-                AnimeXSynonyms.synonym == synonym, Anime.status != "Finished Airing"
+                AnimeXSynonyms.synonym == synonym,
+                Anime.status != "Finished Airing",
             )
             .with_entities(AnimeXSynonyms.mal_aid)
+            .first()
         )
+        if result:
+            return (result[0],), 0
+        else:
+            AnimeSequels = aliased(Anime)
+            result = (
+                query
+                .join(AnimeXContinuations, AnimeXContinuations.anime_id == Anime.mal_aid)
+                .join(AnimeSequels, AnimeSequels.mal_aid == AnimeXContinuations.sequel_id)
+                .filter(
+                    AnimeXSynonyms.synonym == synonym,
+                    AnimeSequels.status != "Finished Airing",
+                )
+                .with_entities(AnimeSequels.mal_aid, AnimeXContinuations.episode_shift)
+                .first()
+            )
 
-        return result
+            if not result:
+                return None, 0
+
+            return (result[0],), result[1]
 
     # @staticmethod
     def select_mal_anime_ids_by_title_part(self, title, session):
@@ -1045,6 +1069,19 @@ class DataInterface:
                 airing=anime["airing_status"],
             )
             session.add(list_entry)
+        session.commit()
+        session.close()
+
+    def insert_new_sequel_data(self, entries):
+        session = self.br.get_session()
+        session.query(AnimeXContinuations).delete()
+        for data in entries:
+            continuation = AnimeXContinuations(
+                anime_id=data[0],
+                sequel_id=data[1],
+                episode_shift=data[2],
+            )
+            session.add(continuation)
         session.commit()
         session.close()
 

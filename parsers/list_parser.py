@@ -85,7 +85,7 @@ class ListImporter:
         self.di = di
         self.synonyms = synonyms
         if autistic:
-            self.jikan = Jikan()
+            self.jikan = Jikan(**config.jikan_params)
             self.br = BaseRelations()
             self.di = DataInterface(self.br)
             self.synonyms = Synonyms(self.di)
