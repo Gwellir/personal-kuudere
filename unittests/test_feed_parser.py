@@ -3,10 +3,11 @@ from unittest import TestCase
 
 from jikanpy import Jikan
 
+import config
 from parsers.feed_parser import TorrentFeedParser, parse_feed_title, title_compare
 from utils.db_wrapper2 import BaseRelations, DataInterface
 
-ji = Jikan()
+ji = Jikan(**config.jikan_params)
 di = DataInterface(BaseRelations())
 tfp = TorrentFeedParser(ji, di)
 

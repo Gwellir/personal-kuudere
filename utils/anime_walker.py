@@ -8,7 +8,7 @@ from orm.ORMWrapper import *
 from utils.db_wrapper2 import DataInterface
 
 base = BaseRelations()
-ji = Jikan()
+ji = Jikan(**config.jikan_params)
 di = DataInterface()
 uf = UtilityFunctions(None, ji, di)
 

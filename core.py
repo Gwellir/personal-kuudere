@@ -1,5 +1,6 @@
 from jikanpy import Jikan
 
+import config
 from handlers import HandlersStructure
 from jobs import BotJobs
 from parsers.feed_parser import TorrentFeedParser
@@ -12,7 +13,7 @@ class BotCore:
     def __init__(self, updater):
         self.br = BaseRelations()
         self.di = DataInterface(self.br)
-        self.jikan = Jikan()
+        self.jikan = Jikan(**config.jikan_params)
         self.feed_parser = TorrentFeedParser(self.jikan, self.di)
         self.synonyms = Synonyms(self.di)
         self.list_importer = ListImporter(self.jikan, self.di, self.synonyms)
