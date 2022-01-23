@@ -15,7 +15,8 @@ from time import sleep
 # service wrappers
 from jikanpy import APIException
 from PIL import Image, UnidentifiedImageError
-from saucenao import SauceNao
+from requests import ReadTimeout
+from saucenao_api import SauceNao
 
 # telegram bot
 from telegram import (
@@ -142,15 +143,20 @@ class UtilityFunctions:
         )
         if not local_result or not local_result.popularity:
             # or datetime.now() - local_result.synced > timedelta(days=14):
-            try:
-                anime = self.jikan.anime(mal_aid)
-                output = AnimeEntry(**anime)
-                self.store_anime(output)
-                output = output._asdict()
-            except APIException as e:
-                print(e.args)
-                output = answer
-            # sleep(config.jikan_delay)
+            while True:
+                try:
+                    anime = self.jikan.anime(mal_aid)
+                    sleep(config.jikan_delay)
+                    output = AnimeEntry(**anime)
+                    self.store_anime(output)
+                    output = output._asdict()
+                    break
+                except APIException as e:
+                    print(e.args)
+                    output = answer
+                    break
+                except ReadTimeout:
+                    print("> jikan rq TIMED OUT")
         else:
             output = answer
         return output
@@ -1058,33 +1064,25 @@ class HandlersStructure:
             name = f"{str(uuid.uuid4())}.jpg"
             file.download(f"img/{name}")
             saucenao = SauceNao(
-                directory="img",
-                databases=999,
-                minimum_similarity=65,
-                combine_api_types=False,
-                api_key=config.saucenao_token,
-                is_premium=False,
-                exclude_categories="",
-                move_to_categories=False,
-                use_author_as_category=False,
-                output_type=SauceNao.API_HTML_TYPE,
-                start_file="",
-                log_level=logging.ERROR,
-                title_minimum_similarity=90,
+                config.saucenao_token,
             )
-            filtered_results = saucenao.check_file(file_name=name)
+            filtered_results = saucenao.from_file(open(f'img\\{name}', 'rb'))
             pprint(filtered_results)
             sep = "\n"
             results = [
-                f"{entry['data']['title']}\n{sep.join(entry['data']['content'])}\n"
+                f"{entry.title}"
                 + (
-                    f"Est. time: {entry['data']['est_time']}\n"
-                    if "est_time" in entry["data"].keys()
+                    f" ({entry.part})" if hasattr(entry, 'part') else ''
+                )
+                + "\n"
+                + (
+                    f"Est. time: {entry.est_time}\n"
+                    if hasattr(entry, "est_time")
                     else ""
                 )
-                + f"Similarity: {entry['header']['similarity']}\n{sep.join(entry['data']['ext_urls'])}"
+                + f"Similarity: {entry.similarity}\n{sep.join(entry.urls)}"
                 for entry in filtered_results
-                if entry["data"]["ext_urls"]
+                if entry.similarity >= 80
             ]  #
             if not results:
                 update.effective_message.reply_text("Похожих изображений не найдено!")

@@ -3,6 +3,7 @@
 import re
 from collections import Counter
 from datetime import datetime, timedelta
+from http.client import RemoteDisconnected
 from time import sleep
 
 import feedparser
@@ -10,7 +11,9 @@ import requests
 from colorama import Fore, Style
 from jikanpy import APIException
 from pytz import timezone
+from requests import ReadTimeout
 
+import config
 from config import jikan_delay
 
 CATCH_360 = ["360p"]
@@ -18,6 +21,12 @@ CATCH_480 = ["480p", "720x480"]
 CATCH_540 = ["540p"]
 CATCH_720 = ["720p", "1280x720"]
 CATCH_1080 = ["1080p", "1920x1080"]
+RESOLUTIONS = {
+    "360p": 480,
+    "480p": 480,
+    "720x480": 480,
+
+}
 match_in_square_brackets = re.compile(r"\[(.*?)\]")
 match_in_round_brackets = re.compile(r"\((.*?)\)")
 match_multiple_spaces = re.compile(r"\s+")
@@ -264,12 +273,15 @@ class TorrentFeedParser:
         session.close()
 
     def get_mal_ongoings_by_title(self, a_title, a_ep_no):
+        import textwrap
+        lines = textwrap.wrap(a_title, config.JIKAN_MAX_LENGTH, break_long_words=False)
+        query = lines[0]
         mal_id = None
         while True:
             try:
                 search_results = self.jikan.search(
                     "anime",
-                    a_title,
+                    query,
                     page=1,
                     parameters={
                         "type": "tv",
@@ -290,12 +302,13 @@ class TorrentFeedParser:
                     )
                 ]
                 break
-            except APIException:
+            except (APIException, ReadTimeout, RemoteDisconnected) as e:
                 sleep(jikan_delay)
+                print(f"> jikan rq failed {e}")
 
         print(f"Can't get a precise result... {mal_ids}")
         if search_results:
-            mal_id = title_compare(search_results["results"], a_title)
+            mal_id = title_compare(search_results["results"], query)
 
         return mal_id
 
@@ -330,8 +343,8 @@ class TorrentFeedParser:
                     a_title, session
                 ).all()
                 if mal_ids and len(mal_ids) == 1:
-                    print(mal_ids[0])
-                    mal_id = mal_ids[0]
+                    print(mal_ids[0][0])
+                    mal_id = mal_ids[0][0]
                 # elif not mal_ids:
                 # todo unify lurking and title comparison
                 else:
