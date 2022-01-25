@@ -13,6 +13,8 @@ from pprint import pprint
 from time import sleep
 
 # service wrappers
+from typing import Dict, List, Union
+
 from jikanpy import APIException
 from PIL import Image, UnidentifiedImageError
 from requests import ReadTimeout
@@ -303,28 +305,41 @@ class UtilityFunctions:
 
         Uses Relations JSON data from the DB."""
 
-        starts = []
+        starts: List[List[int]] = []
+        # подгружаем список тайтлов, id и связей конкретного тайтла
         for entry in self.di.select_relations_data().all():
-            self.relations[entry[0]] = {}
-            self.relations[entry[0]]["title"] = entry[2]
-            for key in entry[1]:
-                self.relations[entry[0]][key] = entry[1][key]
+            # (mal_id, related (JSON), title)
+            mal_aid: int
+            relations: Dict[str, List[Dict[str, Union[str, int]]]]
+            title: str
+            mal_aid, relations, title = entry
+            self.relations[mal_aid] = {}
+            self.relations[mal_aid]["title"] = title
+
+            rel_type: str
+            for rel_type in relations:
+                self.relations[mal_aid][rel_type] = relations[rel_type]
+                # если у тайтла есть сиквел, но не приквел - помещаем в список начал цепочек
                 if (
-                    key == "Sequel"
-                    and ("Prequel" not in entry[1])
-                    and len(entry[1][key]) > 0
+                    rel_type == "Sequel"
+                    and ("Prequel" not in relations)
+                    and len(relations[rel_type]) > 0
                 ):
-                    starts.append([entry[0]])
+                    starts.append([mal_aid])
+
         for chain in starts:
             try:
+                # каждое начало цепи (оно гарантированно имеет сиквел)
                 next_id = int(self.relations[chain[0]]["Sequel"][0]["mal_id"])
                 chain.append(next_id)
             except KeyError as e:
                 print("ERROR:", e.args)
             i = 1
             try:
+                # пока для очередного тайтла в цепочке есть ключ с сиквелами
                 while "Sequel" in self.relations[chain[i]]:
                     for seq in self.relations[chain[i]]["Sequel"]:
+                        # теоретически очередной сиквел уже может (?) быть в цепи
                         if int(seq["mal_id"]) in chain:
                             continue
                         else:
