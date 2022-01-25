@@ -847,7 +847,7 @@ class DataInterface:
     # @staticmethod
     def select_existing_synonyms(self):
         session = self.br.get_session()
-        result = session.query(AnimeXSynonyms)
+        result = session.query(AnimeXSynonyms).with_entities(AnimeXSynonyms.mal_aid, AnimeXSynonyms.synonym)
         session.close()
 
         return result

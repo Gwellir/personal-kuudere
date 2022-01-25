@@ -17,26 +17,27 @@ class Synonyms:
             self.di = DataInterface(br)
         else:
             self.di = data_interface
-        old_synonyms = self.di.select_existing_synonyms()
-        self.pairs |= set(old_synonyms)
 
     def add_to_synonyms(self, mal_aid, synonym):
         if synonym is None:
             return
-        if (mal_aid, synonym) not in self.pairs:
+        else:
             self.pairs.add((mal_aid, synonym))
-            self.di.insert_new_synonym(mal_aid, synonym)
 
     def extract_synonyms(self):
         synlist = self.di.select_all_possible_synonyms().all()
         for entry in synlist:
-            print(f"{entry[0]}:\nmain: {entry[1]}\neng: {entry[2]}\njap: {entry[3]}")
             for i in range(3):
                 self.add_to_synonyms(entry[0], entry[i + 1])
             if entry[4]:
                 for syn in entry[4]:
                     self.add_to_synonyms(entry[0], syn)
-                    print("syn:", syn)
+        old_synonyms = set([(entry[0], entry[1].lower()) for entry in self.di.select_existing_synonyms()])
+        result = [entry for entry in self.pairs if (entry[0], entry[1].lower()) not in old_synonyms]
+        print(len(self.pairs), len(result), len(old_synonyms))
+
+        for pair in result:
+            self.di.insert_new_synonym(pair[0], pair[1])
 
 
 if __name__ == "__main__":
