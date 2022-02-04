@@ -682,13 +682,9 @@ class DataInterface:
 
     # @staticmethod
     def select_ongoing_anime_id_by_synonym(self, synonym, session):
-        query = (
-            session.query(AnimeXSynonyms)
-            .join(Anime)
-        )
+        query = session.query(AnimeXSynonyms).join(Anime)
         result = (
-            query
-            .filter(
+            query.filter(
                 AnimeXSynonyms.synonym == synonym,
                 Anime.status != "Finished Airing",
             )
@@ -696,13 +692,16 @@ class DataInterface:
             .first()
         )
         if result:
-            return (result[0],), 0
+            return result[0], 0
         else:
             AnimeSequels = aliased(Anime)
             result = (
-                query
-                .join(AnimeXContinuations, AnimeXContinuations.anime_id == Anime.mal_aid)
-                .join(AnimeSequels, AnimeSequels.mal_aid == AnimeXContinuations.sequel_id)
+                query.join(
+                    AnimeXContinuations, AnimeXContinuations.anime_id == Anime.mal_aid
+                )
+                .join(
+                    AnimeSequels, AnimeSequels.mal_aid == AnimeXContinuations.sequel_id
+                )
                 .filter(
                     AnimeXSynonyms.synonym == synonym,
                     AnimeSequels.status != "Finished Airing",
@@ -714,7 +713,7 @@ class DataInterface:
             if not result:
                 return None, 0
 
-            return (result[0],), result[1]
+            return result
 
     # @staticmethod
     def select_mal_anime_ids_by_title_part(self, title, session):
@@ -731,22 +730,12 @@ class DataInterface:
             .distinct()
         )
 
-        return result
+        return [e[0] for e in result.all()]
 
     def select_all_anime_ids(self):
         session = self.br.get_session()
         result = session.query(Anime).with_entities(Anime.mal_aid)
         session.close()
-        return result
-
-    # @staticmethod
-    def select_anime_id_is_in_database(self, mal_aid, session):
-        result = (
-            session.query(Anime)
-            .filter(Anime.mal_aid == mal_aid)
-            .with_entities(Anime.mal_aid)
-        )
-
         return result
 
     # @staticmethod
@@ -847,7 +836,9 @@ class DataInterface:
     # @staticmethod
     def select_existing_synonyms(self):
         session = self.br.get_session()
-        result = session.query(AnimeXSynonyms).with_entities(AnimeXSynonyms.mal_aid, AnimeXSynonyms.synonym)
+        result = session.query(AnimeXSynonyms).with_entities(
+            AnimeXSynonyms.mal_aid, AnimeXSynonyms.synonym
+        )
         session.close()
 
         return result
@@ -896,73 +887,12 @@ class DataInterface:
 
     # todo this is some serious fuckery right here
     def upsert_anime_entry(self, a_entry, session):
-        local_entry = self.select_anime_by_id(a_entry.mal_id, sess=session).first()
-        if not local_entry:
-            local_entry = Anime(
-                mal_aid=a_entry.mal_id,
-                title=a_entry.title,
-                title_english=a_entry.title_english,
-                title_japanese=a_entry.title_japanese,
-                synopsis=a_entry.synopsis,
-                show_type=a_entry.type,
-                started_at=a_entry.aired["from"][:10]
-                if a_entry.aired["from"]
-                else None,
-                ended_at=a_entry.aired["to"][:10] if a_entry.aired["to"] else None,
-                episodes=a_entry.episodes,
-                image_url=a_entry.image_url,
-                score=a_entry.score,
-                status=a_entry.status,
-                background=a_entry.background,
-                broadcast=a_entry.broadcast,
-                duration=a_entry.duration,
-                favorites=a_entry.favorites,
-                members=a_entry.members,
-                popularity=a_entry.popularity,
-                premiered=a_entry.premiered,
-                rank=a_entry.rank,
-                rating=a_entry.rating,
-                scored_by=a_entry.scored_by,
-                source=a_entry.source,
-                trailer_url=a_entry.trailer_url,
-                ending_themes=a_entry.ending_themes,
-                related=a_entry.related,
-                opening_themes=a_entry.opening_themes,
-                title_synonyms=a_entry.title_synonyms,
-            )
+        local_entry = self.select_anime_by_id(a_entry["mal_aid"], sess=session)
+        if not local_entry.first():
+            local_entry = Anime(**a_entry)
             session.add(local_entry)
         else:
-            local_entry.title = a_entry.title
-            local_entry.title_english = a_entry.title_english
-            local_entry.title_japanese = a_entry.title_japanese
-            local_entry.synopsis = a_entry.synopsis
-            local_entry.show_type = a_entry.type
-            local_entry.started_at = (
-                a_entry.aired["from"][:10] if a_entry.aired["from"] else None
-            )
-            local_entry.ended_at = (
-                a_entry.aired["to"][:10] if a_entry.aired["to"] else None
-            )
-            local_entry.episodes = a_entry.episodes
-            local_entry.image_url = a_entry.image_url
-            local_entry.score = a_entry.score
-            local_entry.status = a_entry.status
-            local_entry.background = a_entry.background
-            local_entry.broadcast = a_entry.broadcast
-            local_entry.duration = a_entry.duration
-            local_entry.favorites = a_entry.favorites
-            local_entry.members = a_entry.members
-            local_entry.popularity = a_entry.popularity
-            local_entry.premiered = a_entry.premiered
-            local_entry.rank = a_entry.rank
-            local_entry.rating = a_entry.rating
-            local_entry.scored_by = a_entry.scored_by
-            local_entry.source = a_entry.source
-            local_entry.trailer_url = a_entry.trailer_url
-            local_entry.ending_themes = a_entry.ending_themes
-            local_entry.related = a_entry.related
-            local_entry.opening_themes = a_entry.opening_themes
-            local_entry.title_synonyms = a_entry.title_synonyms
+            local_entry.update(a_entry)
         session.commit()
 
     # @staticmethod

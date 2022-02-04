@@ -1,15 +1,19 @@
 from datetime import datetime
 from unittest import TestCase
 
-from jikanpy import Jikan
-
-import config
-from parsers.feed_parser import TorrentFeedParser, parse_feed_title, title_compare
+from parsers.feed_parser import (
+    TorrentFeedParser,
+    get_closest_match_aid,
+    parse_feed_title,
+)
+from utils.anime_lookup import AnimeLookup
 from utils.db_wrapper2 import BaseRelations, DataInterface
+from utils.jikan_custom import JikanCustom
 
-ji = Jikan(**config.jikan_params)
+ji = JikanCustom()
 di = DataInterface(BaseRelations())
-tfp = TorrentFeedParser(ji, di)
+al = AnimeLookup(ji, di)
+tfp = TorrentFeedParser(di, al)
 
 
 class TestFeedParser(TestCase):
@@ -53,4 +57,13 @@ class TestFeedParser(TestCase):
         title = "Tonikaku Kawaii"
         variants = [{"title": "Haikyuu!! To the Top"}]
 
-        self.assertIsNotNone(title_compare(variants, title))
+        self.assertIsNotNone(get_closest_match_aid(variants, title))
+
+    def test_mal_recognition(self):
+        title = "Sono Bisque Doll wa Koi o Suru"
+
+        mal_aid = tfp.get_mal_ongoing_by_title(title, 1)
+        al.get_anime_by_aid(mal_aid)
+
+    def test_check_feeds(self):
+        tfp.check_feeds()

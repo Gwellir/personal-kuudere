@@ -36,6 +36,7 @@ from sqlalchemy.sql.functions import now
 
 # from datetime import datetime
 import config
+from utils.jikan_custom import JikanCustom
 
 Base = declarative_base()
 metadata = Base.metadata
@@ -60,7 +61,6 @@ class BaseRelations:
 
 
 br = BaseRelations()
-jikan = jikanpy.Jikan(**config.jikan_params)
 
 
 class Anime(Base):
@@ -121,6 +121,9 @@ class Anime(Base):
         )
 
 
+jikan = JikanCustom()
+
+
 class Characters(Base):
     __tablename__ = "characters"
 
@@ -138,16 +141,7 @@ class Characters(Base):
     def get_or_create(cls, cid, session) -> Optional["Characters"]:
         char = session.query(Characters).filter_by(mal_cid=cid).first()
         if not char:
-            while True:
-                err_num = None
-                try:
-                    remote_char = jikan.character(cid)
-                except jikanpy.exceptions.APIException as e:
-                    print("Chars get_or_create", e.args)
-                    err_num = e.args[0]
-                sleep(config.jikan_delay)
-                if err_num != 503:
-                    break
+            remote_char = jikan.character(cid)
             anime_ids = [entry["mal_id"] for entry in remote_char["animeography"]]
             related_anime = (
                 session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()

@@ -1,52 +1,51 @@
 # todo news and mangadex feeds
 
 import re
-from collections import Counter
+import sys
 from datetime import datetime, timedelta
-from http.client import RemoteDisconnected
-from time import sleep
 
 import feedparser
 import requests
 from colorama import Fore, Style
-from jikanpy import APIException
+from Levenshtein import distance
 from pytz import timezone
-from requests import ReadTimeout
 
 import config
-from config import jikan_delay
 
-CATCH_360 = ["360p"]
-CATCH_480 = ["480p", "720x480"]
-CATCH_540 = ["540p"]
-CATCH_720 = ["720p", "1280x720"]
-CATCH_1080 = ["1080p", "1920x1080"]
 RESOLUTIONS = {
     "360p": 480,
     "480p": 480,
     "720x480": 480,
-
+    "540p": 480,
+    "720p": 720,
+    "1280x720": 720,
+    "1080p": 1080,
+    "1920x1080": 1080,
 }
 match_in_square_brackets = re.compile(r"\[(.*?)\]")
 match_in_round_brackets = re.compile(r"\((.*?)\)")
 match_multiple_spaces = re.compile(r"\s+")
 match_extension = re.compile(r".*\.(\w+)$")
 match_ep_number = re.compile(r".*((?P<season>S\d+)E|- |episode )(\d+).*")
+match_punct = re.compile(r"[/)(,:.!?+*☆♥★-]")
 
 
 # todo well, this is a piece of shit
-def title_compare(variants, title):
-    t = Counter(title.lower())
-    # min_sum = sum(t.values())
+def get_closest_match_aid(variants, title):
+    min_dist = 6
+    closest_match = None
     for v in variants:
-        if title.lower().startswith(f"{v['title'].lower()} "):
-            return v["mal_id"]
-        c = Counter(v["title"].lower())
-        diff = (t - c) if len(title) > len(v["title"]) else (c - t)
-        print(diff, sum(diff.values()), v["title"])
-        if sum(diff.values()) < 5 and sum(diff.values()) < len(title) / 3:
-            return v["mal_id"]
-    return None
+        v_title = match_multiple_spaces.sub(
+            " ", match_punct.sub(" ", v["title"].lower())
+        ).strip()
+        mal_id = v["mal_id"]
+        if title.lower().startswith(f"{v_title} "):
+            return mal_id
+        d = distance(v_title, title)
+        if d < min_dist:
+            min_dist = d
+            closest_match = mal_id
+    return closest_match
 
 
 def parse_size(description):
@@ -81,16 +80,12 @@ def get_resolution_from_tags(tags):
     :rtype: int
     """
     resolution = None
-    if [res for res in CATCH_720 if res in [t.lower() for t in tags]]:
-        resolution = 720
-    elif [res for res in CATCH_1080 if res in [t.lower() for t in tags]]:
-        resolution = 1080
-    elif (
-        [res for res in CATCH_480 if res in [t.lower() for t in tags]]
-        or [res for res in CATCH_360 if res in [t.lower() for t in tags]]
-        or [res for res in CATCH_540 if res in [t.lower() for t in tags]]
-    ):
-        resolution = 480
+    for tag in tags:
+        try:
+            resolution = RESOLUTIONS.get(tag)
+            break
+        except KeyError:
+            continue
     return resolution
 
 
@@ -106,7 +101,7 @@ def extract_bracketed_tags(matcher, a_title: str, delims):
     return tag_list, a_title
 
 
-def parse_feed_title(a_title):
+def parse_feed_title(a_title: str):
     """
     Parses release title string.
     Looks for any parts of the title wrapped in square or round brackets and creates a tag list from them,
@@ -120,11 +115,15 @@ def parse_feed_title(a_title):
     a_ext = a_ep_no = a_group = None
     group_not_found = True
     all_tags = []
-    tags_in_square, a_title = extract_bracketed_tags(match_in_square_brackets, a_title, ("[", "]"))
+    tags_in_square, a_title = extract_bracketed_tags(
+        match_in_square_brackets, a_title, ("[", "]")
+    )
     if tags_in_square:
         a_group = tags_in_square[0]
         group_not_found = False
-    tags_in_round, a_title = extract_bracketed_tags(match_in_round_brackets, a_title, ("(", ")"))
+    tags_in_round, a_title = extract_bracketed_tags(
+        match_in_round_brackets, a_title, ("(", ")")
+    )
     if tags_in_round:
         if group_not_found:
             a_group = tags_in_round[0]
@@ -142,14 +141,15 @@ def parse_feed_title(a_title):
         a_title = a_title[: a_title.find(f"{ep_number.group(1)}{ep_number.group(3)}")]
         if ep_number.group("season"):
             a_title += ep_number.group("season")
-        a_title = match_multiple_spaces.sub(" ", a_title.strip())
+    a_title = match_punct.sub(" ", a_title)
+    a_title = match_multiple_spaces.sub(" ", a_title).strip()
     return (
         int(a_ep_no) if a_ep_no else None,
-        a_group[:90] if a_group else None,
+        a_group[:90] if a_group else None,  # fix for group names which are too long
         a_title,
         a_res,
         a_ext,
-    )  # fix for group names which are too long
+    )
 
 
 def get_local_time(dtime):
@@ -168,17 +168,17 @@ class TorrentFeedParser:
     MY_FEEDS = ["https://nyaa.si/?page=rss&c=1_2&f=2"]
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
-    def __init__(self, jikan, di):
+    def __init__(self, data_interface, anime_lookup):
         """
         Initializes requirements for feed parser
 
-        :param jikan: Jikan API wrapper instance
-        :type jikan: :class:`jikanpy.Jikan`
-        :param di: DataInterface DB connector instance
-        :type di: :class:`utils.db_wrapper2.DataInterface`
+        :param data_interface: DataInterface DB connector instance
+        :type data_interface: :class:`utils.db_wrapper2.DataInterface`
+        :param anime_lookup: AnimeLookup instance
+        :type anime_lookup: :class:`utils.anime_lookup.AnimeLookup`
         """
-        self.jikan = jikan
-        self.di = di
+        self.di = data_interface
+        self.al = anime_lookup
 
     def add_to_db(self, a_title, a_date, a_link, a_description, session):
         """
@@ -262,53 +262,40 @@ class TorrentFeedParser:
             self.read_article_feed(feed, session)
         release_list = self.di.select_unchecked_feed_entries(session).all()
         for release in release_list:
-            self.do_recognize(
+            result = self.do_recognize(
                 release.title,
                 release.date,
                 release.link,
                 parse_size(release.description),
                 session,
             )  # just use a fucking hash as torrent identity
+            if result and not ("unittest" in sys.modules.keys()):
+                self.torrent_save(
+                    *result,
+                    session,
+                )
         session.commit()
         session.close()
 
-    def get_mal_ongoings_by_title(self, a_title, a_ep_no):
+    def get_mal_ongoing_by_title(self, a_title, a_ep_no):
         import textwrap
-        lines = textwrap.wrap(a_title, config.JIKAN_MAX_LENGTH, break_long_words=False)
+
+        lines = textwrap.wrap(
+            a_title, config.JIKAN_MAX_QUERY_LENGTH, break_long_words=False
+        )
         query = lines[0]
         mal_id = None
-        while True:
-            try:
-                search_results = self.jikan.search(
-                    "anime",
-                    query,
-                    page=1,
-                    parameters={
-                        "type": "tv",
-                        "status": "airing",
-                        "limit": 5,
-                        "genre": 15,
-                        "genre_exclude": 0,
-                    },
-                )
-                sleep(jikan_delay)
-                # test for legit episode numbers as MAL sometimes returns very strange title matches
-                mal_ids = [
-                    (result["mal_id"],)
-                    for result in search_results["results"]
-                    if (
-                            result["episodes"] == 0
-                            or result["episodes"] >= a_ep_no
-                    )
-                ]
-                break
-            except (APIException, ReadTimeout, RemoteDisconnected) as e:
-                sleep(jikan_delay)
-                print(f"> jikan rq failed {e}")
+        search_results = self.al.mal_search_by_name(query, ongoing=True)
+        # test for legit episode numbers as MAL sometimes returns very strange title matches
+        mal_ids = [
+            (result["mal_id"],)
+            for result in search_results
+            if (result["episodes"] == 0 or result["episodes"] >= a_ep_no)
+        ]
 
         print(f"Can't get a precise result... {mal_ids}")
         if search_results:
-            mal_id = title_compare(search_results["results"], query)
+            mal_id = get_closest_match_aid(search_results, query.lower())
 
         return mal_id
 
@@ -336,32 +323,23 @@ class TorrentFeedParser:
             mal_id, ep_shift = self.di.select_ongoing_anime_id_by_synonym(
                 a_title, session
             )
-            a_ep_no = a_ep_no - ep_shift
-            print(mal_id)
-            if not mal_id:
-                mal_ids = self.di.select_mal_anime_ids_by_title_part(
-                    a_title, session
-                ).all()
-                if mal_ids and len(mal_ids) == 1:
-                    print(mal_ids[0][0])
-                    mal_id = mal_ids[0][0]
-                # elif not mal_ids:
-                # todo unify lurking and title comparison
-                else:
-                    mal_id = self.get_mal_ongoings_by_title(a_title, a_ep_no)
-                # check whether we have title info
-                if mal_id:
-                    if not self.di.select_anime_id_is_in_database(
-                        mal_id, session
-                    ).first():
-                        a_info = self.jikan.anime(mal_id)
-                        sleep(jikan_delay)
-                        # is sometimes unreachable
-                        self.di.upsert_anime_entry(a_info, session)
-                    # todo sometimes a double can make it here despite synonym check
-                    self.di.insert_new_synonym(mal_id, a_title)
-            else:
-                mal_id = mal_id[0]
+            if ep_shift <= a_ep_no:
+                a_ep_no = a_ep_no - ep_shift
+                print(mal_id)
+                if not mal_id:
+                    mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title, session)
+                    if mal_ids and len(mal_ids) == 1:
+                        print(mal_ids[0])
+                        mal_id = mal_ids[0]
+                    # elif not mal_ids:
+                    # todo unify lurking and title comparison
+                    else:
+                        mal_id = self.get_mal_ongoing_by_title(a_title, a_ep_no)
+                    # check whether we have title info
+                    if mal_id:
+                        a_info = self.al.get_anime_by_aid(mal_id)
+                        # todo sometimes a double can make it here despite synonym check
+                        self.di.insert_new_synonym(mal_id, a_title)
             self.di.update_anifeeds_with_parsed_information(
                 mal_id,
                 a_group,
@@ -372,18 +350,9 @@ class TorrentFeedParser:
                 a_date,
                 session,
             )
-            # if we have a recognized title in the end, save the torrent
             if mal_id:
-                self.torrent_save(
-                    mal_id,
-                    a_group,
-                    a_ep_no,
-                    torrent_link,
-                    a_title,
-                    a_res,
-                    file_size,
-                    session,
-                )
+                return mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size
+
         else:
             print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
             self.di.update_anifeeds_unrecognized_entry(

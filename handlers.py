@@ -1,6 +1,4 @@
-import argparse
 import inspect
-import logging
 import os
 import re
 import sys
@@ -10,17 +8,16 @@ from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta
 from io import BufferedReader, BufferedWriter, BytesIO
 from pprint import pprint
-from time import sleep
+from typing import TYPE_CHECKING
 
-# service wrappers
-from typing import Dict, List, Union
+from telegram.error import BadRequest
 
-from jikanpy import APIException
+if TYPE_CHECKING:
+    from typing import Dict, List, Union
+
+import jikanpy.exceptions
 from PIL import Image, UnidentifiedImageError
-from requests import ReadTimeout
 from saucenao_api import SauceNao
-
-# telegram bot
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -31,14 +28,11 @@ from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
 
 import config
-
-# my classes
-from entity_data import AnimeEntry
 from handler_modules.random import AnimeFilter, AnimeSelector
 from handler_modules.voting import Nominate, ShowCandidates, Voting, VotingUpload
+from utils.expiring_set import ExpiringSet
 
 # todo inline keyboard builder shouldn't be here
-from jobs import BotJobs
 
 
 def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
@@ -87,15 +81,14 @@ def detect_unused_handlers(handlers_structure):
 
 
 class UtilityFunctions:
-    def __init__(self, jikan, di):
+    def __init__(self, data_interface, anime_lookup):
         """
 
-        :param jikan:
-        :param di: DataInterface DB connector instance
-        :type di: :class:`db_wrapper2.DataInterface`
+        :param data_interface: DataInterface DB connector instance
+        :type data_interface: :class:`db_wrapper2.DataInterface`
         """
-        self.jikan = jikan
-        self.di = di
+        self.di = data_interface
+        self.al = anime_lookup
         self.relations = {}
         self.build_rel_structure()
 
@@ -123,98 +116,11 @@ class UtilityFunctions:
         self.di.delete_tracked_anime(uid, aid)
         return True
 
-    # todo add synonyms
-    def store_anime(self, a_entry):
-        session = self.di.br.get_session()
-        self.di.upsert_anime_entry(a_entry, session)
-        session.commit()
-        session.close()
-
-    def get_anime_by_aid(self, mal_aid):
-        local_result = self.di.select_anime_by_id(mal_aid).first()
-        answer = (
-            {
-                "mal_id": local_result.mal_aid,
-                "title": local_result.title,
-                "airing": local_result.status == "Currently Airing",
-                "type": local_result.show_type,
-                "members": local_result.members,
-            }
-            if local_result
-            else None
-        )
-        if not local_result or not local_result.popularity:
-            # or datetime.now() - local_result.synced > timedelta(days=14):
-            while True:
-                try:
-                    anime = self.jikan.anime(mal_aid)
-                    sleep(config.jikan_delay)
-                    output = AnimeEntry(**anime)
-                    self.store_anime(output)
-                    output = output._asdict()
-                    break
-                except APIException as e:
-                    print(e.args)
-                    output = answer
-                    break
-                except ReadTimeout:
-                    print("> jikan rq TIMED OUT")
-        else:
-            output = answer
-        return output
-
-    def get_anime_info(self, query):
-        mal_info = self.lookup_anime_info_by_title(query)
+    def get_anime_info(self, query) -> str:
+        mal_info = self.al.lookup_anime_info_by_title(query)
         if mal_info:
             anime = self.di.select_anime_by_id(mal_info[0][0]).first()
-            # todo it kinda seems that I'm retarded...
-            output = AnimeEntry(
-                title=anime.title,
-                type=anime.show_type,
-                status=anime.status,
-                episodes=anime.episodes,
-                aired={
-                    "from": str(anime.started_at) if anime.started_at else None,
-                    "to": str(anime.ended_at) if anime.ended_at else None,
-                },
-                score=anime.score,
-                image_url=anime.image_url,
-                synopsis=anime.synopsis,
-                url=f"https://myanimelist.net/anime/{anime.mal_aid}",
-                airing=None,
-                background=None,
-                broadcast=None,
-                duration=None,
-                ending_themes=None,
-                favorites=None,
-                genres=None,
-                headers=None,
-                jikan_url=None,
-                licensors=None,
-                mal_id=None,
-                members=None,
-                opening_themes=None,
-                popularity=None,
-                premiered=None,
-                producers=None,
-                rank=None,
-                rating=None,
-                related=None,
-                request_cache_expiry=None,
-                request_cached=None,
-                request_hash=None,
-                scored_by=None,
-                source=None,
-                studios=None,
-                title_english=None,
-                title_japanese=None,
-                title_synonyms=None,
-                trailer_url=None,
-                themes=None,
-                demographics=None,
-                explicit_genres=None,
-                external_links=None,
-            )
+            output = str(anime)
             if (
                 anime.mal_aid in self.relations
                 and "chain" in self.relations[anime.mal_aid]
@@ -227,78 +133,10 @@ class UtilityFunctions:
                 ]
                 extension = " ->\n".join(franchise)
                 # print(extension)
-                output = f"{str(output)}\n<b>Timeline:</b>\n{extension}"
+                output = f"{output}\n<b>Timeline:</b>\n{extension}"
         else:
             output = None
         return output
-
-    # todo add streamlined search in cached base
-    def lookup_anime_info_by_title(self, a_title: str, ongoing=False):
-        """Searches the DB for titles matching query,
-        order: exact match > substring > split words in the same order > MAL api search"""
-
-        mal_info = self.di.select_anime_info_by_exact_synonym(a_title)
-        if not mal_info:
-            mal_info = self.di.select_anime_info_by_synonym_part(a_title)
-        if not mal_info:
-            mal_info = self.di.select_anime_info_by_split_words(a_title)
-        if not mal_info:
-            print(f'Looking up "{a_title}" on MAL...')
-            if ongoing:
-                try:
-                    search_results = self.jikan.search(
-                        "anime",
-                        a_title,
-                        page=1,
-                        parameters={
-                            "type": "tv,ona,ova",
-                            "status": "airing",
-                            "limit": 5,
-                            "genre": 15,
-                            "genre_exclude": 0,
-                        },
-                    )
-                except APIException:
-                    return None
-            else:
-                try:
-                    search_results = self.jikan.search(
-                        "anime", a_title, page=1, parameters={"limit": 5}
-                    )
-                except APIException:
-                    return None
-            sleep(config.jikan_delay)
-
-            mal_info = [
-                (
-                    result["mal_id"],
-                    result["title"],
-                    result["airing"],
-                    result["type"],
-                    result["members"],
-                )
-                for result in search_results["results"]
-            ]
-            if mal_info:
-                self.get_anime_by_aid(mal_info[0][0])
-            else:
-                return None
-        # updates entries older than two weeks upon user`s request
-        elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
-            result = self.get_anime_by_aid(mal_info[0][0])
-            mal_info[0] = (
-                result["mal_id"],
-                result["title"],
-                result["airing"],
-                result["type"],
-                result["members"],
-            )
-        else:
-            # mal_info = sorted(mal_info, key=lambda item: len(item[1]), reverse=False)
-            mal_info = sorted(mal_info, key=lambda item: len(item[1]))
-        if ongoing:
-            mal_info = [entry for entry in mal_info if entry[2] is True]
-        return mal_info
 
     def build_rel_structure(self):
         """Creates the longest prequel-sequel streaks for all known anime titles.
@@ -352,32 +190,41 @@ class UtilityFunctions:
         for chain in starts:
             for anime_id in chain:
                 if anime_id not in self.relations:
-                    self.get_anime_by_aid(anime_id)
-                    sleep(config.jikan_delay)
+                    try:
+                        self.al.get_anime_by_aid(anime_id)
+                    except jikanpy.exceptions.APIException as e:
+                        if e.args[0] == 404:
+                            # если аниме с соответствующим id не существует, мы обновляем
+                            # информацию о его приквеле, чтобы получить актуальный id сиквела
+                            self.al.get_anime_by_aid(_previous_id, forced=True)
+                            break
                     self.relations[anime_id] = {"title": "Unknown"}
                 if "chain" in self.relations[anime_id] and len(
                     self.relations[anime_id]["chain"]
                 ) > len(chain):
                     continue
                 self.relations[anime_id]["chain"] = chain
+                _previous_id = anime_id
 
 
 class HandlersStructure:
-    def __init__(self, updater, jikan, di, li):
+    def __init__(self, updater, jikan, data_interface, list_importer, anime_lookup):
         """
         Initializes requirements for handlers
 
         :param updater:
         :param jikan:
-        :param di: DataInterface DB connector instance
-        :type di: :class:`db_wrapper2.DataInterface`
-        :type li: :class:`list_parser.ListImporter`
+        :param data_interface: DataInterface DB connector instance
+        :type data_interface: :class:`db_wrapper2.DataInterface`
+        :type list_importer: :class:`list_parser.ListImporter`
         """
         self.updater = updater
-        self.di = di
-        self.li = li
+        self.di = data_interface
+        self.li = list_importer
         self.jikan = jikan
-        self.utilities = UtilityFunctions(jikan, di)
+        self.al = anime_lookup
+        self.utilities = UtilityFunctions(data_interface, anime_lookup)
+        self.timed_out = ExpiringSet(default_max_age=1800)
         self.handlers_list = HandlersList(
             [
                 # these commands can be used in group chats
@@ -411,6 +258,12 @@ class HandlersStructure:
                     "function": self.convert_webp,
                     "chats": [config.gacha_chat],
                 },
+                # {
+                #     "command": ["admins"],
+                #     "function": self.ping_admins,
+                #     "chats": [config.gacha_chat],
+                #     "no_main": True,
+                # },
             ],
             [
                 # these handlers can be used in private chats with a bot
@@ -768,7 +621,7 @@ class HandlersStructure:
         status_dict = {1: "ong", 2: "done", 3: "hold", 4: "drop", 6: "PTW"}
         titles = None
         if len(q) > 0:
-            matches = self.utilities.lookup_anime_info_by_title(q)
+            matches = self.al.lookup_anime_info_by_title(q)
             answer = {
                 "chat_id": update.effective_chat.id,
                 "parse_mode": ParseMode.HTML,
@@ -818,7 +671,6 @@ class HandlersStructure:
     def process_waifus(self, update, context):
         def waifu_in_anime(id, block_list):
             info = self.jikan.character(id)
-            sleep(config.jikan_delay)
             in_anime = [(item["mal_id"], item["name"]) for item in info["animeography"]]
             new_anime = [
                 anime
@@ -1081,14 +933,12 @@ class HandlersStructure:
             saucenao = SauceNao(
                 config.saucenao_token,
             )
-            filtered_results = saucenao.from_file(open(f'img\\{name}', 'rb'))
+            filtered_results = saucenao.from_file(open(f"img\\{name}", "rb"))
             pprint(filtered_results)
             sep = "\n"
             results = [
                 f"{entry.title}"
-                + (
-                    f" ({entry.part})" if hasattr(entry, 'part') else ''
-                )
+                + (f" ({entry.part})" if hasattr(entry, "part") else "")
                 + "\n"
                 + (
                     f"Est. time: {entry.est_time}\n"
@@ -1183,6 +1033,29 @@ class HandlersStructure:
         reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=1))
         context.bot.send_message(
             chat_id=update.effective_chat.id, text=msg, reply_markup=reply_markup
+        )
+
+    def ping_admins(self, update, context):
+        if update.effective_user.id in self.timed_out:
+            return
+        self.timed_out.add(update.effective_user.id, custom_max_age=1800)
+        try:
+            admins = update.effective_chat.get_administrators()
+        except BadRequest:
+            return
+        text = " ".join(
+            [
+                admin.user.mention_html(
+                    f"@{admin.user.username}"
+                    if admin.user.username
+                    else admin.user.full_name
+                ) for admin in admins
+            ]
+        )
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=text,
+            parse_mode=ParseMode.HTML,
         )
 
     def show_digest(self, update, context):

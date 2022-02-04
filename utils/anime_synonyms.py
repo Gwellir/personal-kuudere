@@ -32,8 +32,17 @@ class Synonyms:
             if entry[4]:
                 for syn in entry[4]:
                     self.add_to_synonyms(entry[0], syn)
-        old_synonyms = set([(entry[0], entry[1].lower()) for entry in self.di.select_existing_synonyms()])
-        result = [entry for entry in self.pairs if (entry[0], entry[1].lower()) not in old_synonyms]
+        old_synonyms = set(
+            [
+                (entry[0], entry[1].lower())
+                for entry in self.di.select_existing_synonyms()
+            ]
+        )
+        result = [
+            entry
+            for entry in self.pairs
+            if (entry[0], entry[1].lower()) not in old_synonyms
+        ]
         print(len(self.pairs), len(result), len(old_synonyms))
 
         for pair in result:

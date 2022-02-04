@@ -9,22 +9,26 @@ import config
 
 
 class BotJobs:
-    def __init__(self, updater, feed_parser, list_importer, data_interface):
+    def __init__(
+        self, updater, feed_parser, list_importer, data_interface, anime_lookup
+    ):
         """
         Initializes requirements for jobs
 
         :param data_interface: DataInterface DB connector instance
-        :type data_interface: :class:`db_wrapper2.DataInterface`
+        :type data_interface: :class:`utils.db_wrapper2.DataInterface`
         :param list_importer: ListImporter instance
-        :type list_importer: :class:`list_parser.ListImporter`
+        :type list_importer: :class:`parsers.list_parser.ListImporter`
         :param synonyms: Synonyms processor instance
-        :type synonyms: :class:`anime_synonyms.Synonyms`
+        :type synonyms: :class:`utils.anime_synonyms.Synonyms`
+        :type anime_lookup: :class:`utils.anime_lookup.AnimeLookup`
 
         """
         self.feed_parser = feed_parser
         self.li = list_importer
         self.updater = updater
         self.di = data_interface
+        self.al = anime_lookup
 
     def update_nyaa(self, callback):
         self.feed_parser.check_feeds()
@@ -79,18 +83,25 @@ class BotJobs:
         self.li.update_seasonal()
 
     def update_continuations(self, callback):
-        response = requests.get("https://raw.githubusercontent.com/erengy/anime-relations/master/anime-relations.txt")
+        response = requests.get(
+            "https://raw.githubusercontent.com/erengy/anime-relations/master/anime-relations.txt"
+        )
         text_lines = response.text.split("\n")
         data_lines = [line for line in text_lines if line.startswith("- ")]
         entries = []
+        checkset = set()
         for entry in data_lines:
             m = re.match(
-                r'- (?P<mal_old>\d+|\?)\|(?P<kitsu_old>\d+|\?)\|(?P<alist_old>\d+|\?):(?P<old_ep>\d+)[-0-9]*'
-                r' -> (?P<mal_new>\d+|\?)\|(?P<kitsu_new>\d+|\?)\|(?P<alist_new>\d+|\?):(?P<new_ep>\d+)[-0-9!]*',
-                entry
+                r"- (?P<mal_old>\d+|\?)\|(?P<kitsu_old>\d+|\?)\|(?P<alist_old>\d+|\?):(?P<old_ep>\d+)[-0-9]*"
+                r" -> (?P<mal_new>\d+|\?)\|(?P<kitsu_new>\d+|\?)\|(?P<alist_new>\d+|\?):(?P<new_ep>\d+)[-0-9!]*",
+                entry,
             )
-            if m and m.group('mal_old') != '?':
-                ep_shift = int(m.group('old_ep')) - int(m.group('new_ep'))
-                entries.append((m.group('mal_old'), m.group('mal_new'), ep_shift))
+            if m and m.group("mal_old") != "?":
+                ep_shift = int(m.group("old_ep")) - int(m.group("new_ep"))
+                entries.append((m.group("mal_old"), m.group("mal_new"), ep_shift))
+                checkset.update({m.group("mal_old"), m.group("mal_new")})
+
+        for anime_id in checkset:
+            self.al.get_anime_by_aid(anime_id)
         if entries:
             self.di.insert_new_sequel_data(entries)
