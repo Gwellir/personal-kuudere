@@ -1,16 +1,15 @@
 from random import randint, shuffle
-from time import sleep
 
-from jikanpy import APIException, Jikan
+from jikanpy import APIException
 
-from handlers import UtilityFunctions
 from orm.ORMWrapper import *
+from utils.anime_lookup import AnimeLookup
 from utils.db_wrapper2 import DataInterface
 
 base = BaseRelations()
-ji = Jikan(**config.jikan_params)
-di = DataInterface()
-uf = UtilityFunctions(None, ji, di)
+ji = JikanCustom()
+di = DataInterface(base)
+al = AnimeLookup(ji, di)
 
 # ongoing_ids = [e[0] for e in di.select_ongoing_ids().all()]
 # for _id in ongoing_ids:
@@ -21,11 +20,9 @@ def get_anime_by_ids(ls_ids):
     shuffle(ls_ids)
     print(len(ls_ids))
     for i in range(len(ls_ids)):
-        try:
-            uf.get_anime_by_aid(ls_ids[i])
-        except APIException:
+        res = al.get_anime_by_aid(ls_ids[i])
+        if not res:
             print("FAIL: ", ls_ids[i])
-        sleep(config.jikan_delay)
         sleep(randint(0, 2))
         if i % 30 == 29:
             print("got", i, "titles -", len(ls_ids) - i, "remaining")
@@ -34,7 +31,10 @@ def get_anime_by_ids(ls_ids):
 
 anime_ids = [
     e[0]
-    for e in base.session.query(Anime.mal_aid).filter(Anime.popularity == None).all()
+    for e in base.get_session()
+    .query(Anime.mal_aid)
+    .filter(Anime.popularity == None)
+    .all()
 ]
 
 get_anime_by_ids(anime_ids)

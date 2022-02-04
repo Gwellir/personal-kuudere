@@ -63,10 +63,14 @@ class ListExtractor:
 
     def get_merged_season_tracking(self, season_name):
         import_tracking = (
-            self._select_full_tracking_for_imports().filter(AnimeXSeasons.season == season_name).all()
+            self._select_full_tracking_for_imports()
+            .filter(AnimeXSeasons.season == season_name)
+            .all()
         )
         bot_tracking = (
-            self._select_full_tracking_for_bot().filter(AnimeXSeasons.season == season_name).all()
+            self._select_full_tracking_for_bot()
+            .filter(AnimeXSeasons.season == season_name)
+            .all()
         )
         pprint(import_tracking)
         pprint(bot_tracking)

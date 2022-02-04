@@ -8,17 +8,17 @@ from time import sleep
 
 import requests
 import simplejson
-from jikanpy import Jikan, exceptions
+from jikanpy import exceptions
 
 import config
-from entity_data import AnimeEntry
 from handlers import UtilityFunctions
+from utils.anime_lookup import AnimeLookup
 from utils.anime_synonyms import Synonyms
 from utils.db_wrapper2 import BaseRelations, DataInterface
 from utils.exporter import ListExtractor
+from utils.jikan_custom import JikanCustom
 
 PAGE_SIZE = 300
-API_ERROR_LIMIT = 20
 AL_URL = "https://graphql.anilist.co"
 AL_USER_QUERY = """
 query ($name: String) { # Define which variables will be used in the query (id)
@@ -73,23 +73,25 @@ MONTH_TO_SEASON = {
 
 
 class ListImporter:
-    def __init__(self, jikan, di, synonyms, autistic=False):
+    def __init__(self, jikan, data_interface, anime_lookup, synonyms, autistic=False):
         """
         Initializes requirements for list parser
 
         :param jikan:
-        :param di: DataInterface DB connector instance
-        :type di: :class:`db_wrapper2.DataInterface`
+        :param data_interface: DataInterface DB connector instance
+        :type data_interface: :class:`db_wrapper2.DataInterface`
         """
         self.jikan = jikan
-        self.di = di
+        self.di = data_interface
         self.synonyms = synonyms
+        self.al = anime_lookup
         if autistic:
-            self.jikan = Jikan(**config.jikan_params)
+            self.jikan = JikanCustom()
             self.br = BaseRelations()
             self.di = DataInterface(self.br)
             self.synonyms = Synonyms(self.di)
-        self.uf = UtilityFunctions(self.jikan, self.di)
+            self.al = AnimeLookup(self.jikan, self.di)
+        self.uf = UtilityFunctions(self.di, self.al)
 
     # call this
     def update_all(self):
@@ -165,7 +167,7 @@ class ListImporter:
         anime_list = []
         err_count = 0
         if not answer:
-            while err_count < API_ERROR_LIMIT:
+            while err_count < config.API_ERROR_LIMIT:
                 variables = {
                     "username": user,
                     "page": curr_page,
@@ -191,7 +193,7 @@ class ListImporter:
                 curr_page += 1
                 if not has_next:
                     break
-            if err_count == API_ERROR_LIMIT:
+            if err_count == config.API_ERROR_LIMIT:
                 anime_list = []
         print(len(anime_list), "items received.")
         return anime_list
@@ -203,36 +205,20 @@ class ListImporter:
         answer = None
         curr_page = 0
         anime_list = []
-        err_count = 0
         if not answer:
-            while curr_page < length / PAGE_SIZE and err_count <= API_ERROR_LIMIT:
-                try:
-                    answer = self.jikan.user(
-                        username=user["username"],
-                        request="animelist",
-                        argument="all",
-                        page=curr_page + 1,
-                        # parameters={'sort': 'descending', 'order_by': 'score'}
-                    )
-                    sleep(config.jikan_delay)
-                    print(curr_page, err_count)
-                    anime_list += answer["anime"]
-                    err_count = 0
-                except simplejson.errors.JSONDecodeError:
-                    answer = {}
-                    anime_list = []
-                    break
-                except exceptions.APIException:
-                    err_count += 1
-                    wait_s = config.jikan_delay * err_count
-                    print(
-                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                    )
-                    sleep(wait_s)
-                    continue
+            while curr_page < length / PAGE_SIZE:
+                answer = self.jikan.user(
+                    username=user["username"],
+                    request="animelist",
+                    argument="all",
+                    page=curr_page + 1,
+                    # parameters={'sort': 'descending', 'order_by': 'score'}
+                )
+                print(curr_page)
+                anime_list += answer["anime"]
                 curr_page += 1
-            if err_count == API_ERROR_LIMIT:
-                anime_list = []
+                if not answer:
+                    break
         test_set = set()
         checked_list = []
         for item in anime_list:
@@ -251,23 +237,7 @@ class ListImporter:
         else:
             userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
-            err_count = 0
-            user = None
-            while not user and err_count <= API_ERROR_LIMIT:
-                try:
-                    user = self.jikan.user(username=user_entry[0])
-                    pprint(user)
-                    sleep(config.jikan_delay)
-                except simplejson.errors.JSONDecodeError:
-                    break
-                except exceptions.APIException:
-                    err_count += 1
-                    wait_s = config.jikan_delay * err_count
-                    print(
-                        f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                    )
-                    sleep(wait_s)
-                    continue
+            user = self.jikan.user(username=user_entry[0])
             print(user["username"], "-> got profile data")
             if not user_entry[1]:
                 self.di.update_users_service_id_for_service_nick(
@@ -290,10 +260,9 @@ class ListImporter:
         pprint(missing)
         lost = set()
         for anime_id in missing:
-            anime = self.uf.get_anime_by_aid(anime_id)
+            anime = self.al.get_anime_by_aid(anime_id)
             if not anime:
                 lost.add(anime_id)
-            sleep(config.jikan_delay)
         return lost
 
     def update_ani_list_status(self, nick=None):
@@ -313,7 +282,7 @@ class ListImporter:
                 answer = response.json()
                 user_id = answer["data"]["User"]["id"]
                 print(user_id)
-                sleep(config.jikan_delay)
+                sleep(config.JIKAN_DELAY)
                 self.di.update_users_service_id_for_service_nick(user_id, user_entry[0])
             else:
                 user_id = user_entry[1]
@@ -332,18 +301,14 @@ class ListImporter:
 
     def update_seasonal(self):
         curr_season, season_name = self.get_anime_season_mal()
-        sleep(config.jikan_delay)
         self.base_update(curr_season, season_name)
 
         prev_season, season_name = self.get_anime_season_mal(shift=-1)
-        sleep(config.jikan_delay)
         self.base_update(prev_season, season_name)
 
         next_season, season_name = self.get_anime_season_mal(shift=1)
-        sleep(config.jikan_delay)
         self.base_update(next_season, season_name)
         # next_2_season = self.get_anime_season_mal(shift=2)
-        # sleep(config.jikan_delay)
         # self.base_update(next_2_season)
 
         later_season, season_name = self.get_anime_season_mal(later=True)
@@ -352,10 +317,6 @@ class ListImporter:
 
     def has_changed(self, anime, session):
         stored_entry = self.di.select_anime_by_id(anime["mal_id"], sess=session).first()
-        # pprint(stored_entry)
-        # print(anime['airing_start'][:10])
-        # print(str(stored_entry.started_at)[:10])
-        # return False
         if not stored_entry:
             return True
         elif (
@@ -414,29 +375,9 @@ class ListImporter:
                 producer_list.extend([producer["mal_id"] for producer in new_producers])
             # if not ani_db.select('mal_aid', 'anime', f"mal_aid = %s", [anime['mal_id']]):
             if self.has_changed(anime, session):
-                remote_entry = None
-                err_count = 0
-                while not remote_entry and err_count <= API_ERROR_LIMIT:
-                    try:
-                        remote_entry = self.jikan.anime(anime["mal_id"])
-                        sleep(config.jikan_delay)
-                    except simplejson.errors.JSONDecodeError:
-                        break
-                    except (
-                        exceptions.APIException,
-                        requests.exceptions.ChunkedEncodingError,
-                    ):
-                        err_count += 1
-                        wait_s = config.jikan_delay * err_count
-                        print(
-                            f"MAL inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                        )
-                        sleep(wait_s)
-                        continue
-                # sleep(config.jikan_delay)
+                remote_entry = self.jikan.anime(anime["mal_id"])
                 pprint(remote_entry)
-                ae = AnimeEntry(**remote_entry)
-                self.di.upsert_anime_entry(ae, session)
+                self.di.upsert_anime_entry(remote_entry, session)
                 # new_list.append(anime)
                 self.di.insert_new_axg(anime, session)
                 self.di.insert_new_axp(anime, session)
@@ -456,10 +397,10 @@ class ListImporter:
 
 
 if __name__ == "__main__":
-    li = ListImporter(None, None, None, autistic=True)
+    li = ListImporter(None, None, None, None, autistic=True)
     # li.update_mal_list_status("DrumBox")
     # li.update_all()
     # li.get_anime_season_mal()
-    # li.update_seasonal()
-    br = BaseRelations()
-    ListExtractor(br, DataInterface(br)).save_season_stats_as_json()
+    li.update_seasonal()
+    # br = BaseRelations()
+    # ListExtractor(br, DataInterface(br)).save_season_stats_as_json()
