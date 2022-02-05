@@ -79,14 +79,10 @@ def get_resolution_from_tags(tags):
 
     :rtype: int
     """
-    resolution = None
     for tag in tags:
-        try:
-            resolution = RESOLUTIONS.get(tag)
-            break
-        except KeyError:
-            continue
-    return resolution
+        if resolution := RESOLUTIONS.get(tag):
+            return resolution
+    return None
 
 
 def extract_bracketed_tags(matcher, a_title: str, delims):
