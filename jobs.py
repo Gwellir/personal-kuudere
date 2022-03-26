@@ -6,6 +6,7 @@ from telegram.error import BadRequest
 from torrentool.api import Torrent
 
 import config
+from utils.daily_digest import get_digest
 
 
 class BotJobs:
@@ -35,10 +36,11 @@ class BotJobs:
         self.deliver_torrents()
 
     def show_daily_events(self, callback):
-        today_titles = self.di.select_today_titles().all()
+        digest = get_digest()
+        digest.sort(key=lambda title: title.get("name"))
         daily_list = [
-            f'<a href="https://myanimelist.net/anime/{e[2]}">{e[0]}</a> (<i>{e[1]}</i>)'
-            for e in today_titles
+            f'<a href="https://myanimelist.net/anime/{t["mal_aid"]}">{t["name"]}</a>'
+            for t in digest
         ]
         if daily_list:
             msg = "#digest\nСегодня ожидаются серии:\n\n" + "\n".join(daily_list)
