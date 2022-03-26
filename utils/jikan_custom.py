@@ -31,6 +31,7 @@ def retried(func):
                 requests.exceptions.ChunkedEncodingError,
                 requests.exceptions.ConnectionError,
                 requests.exceptions.ReadTimeout,
+                ConnectionResetError,
                 http.client.RemoteDisconnected,
             ) as e:
                 if e.args[0] == 404:

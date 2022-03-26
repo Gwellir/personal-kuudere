@@ -139,6 +139,8 @@ def parse_feed_title(a_title: str):
             a_title += ep_number.group("season")
     a_title = match_punct.sub(" ", a_title)
     a_title = match_multiple_spaces.sub(" ", a_title).strip()
+    if len(a_title) <= 2:
+        a_title = f" {a_title}"
     return (
         int(a_ep_no) if a_ep_no else None,
         a_group[:90] if a_group else None,  # fix for group names which are too long
