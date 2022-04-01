@@ -37,9 +37,10 @@ class BotJobs:
 
     def show_daily_events(self, callback):
         digest = get_digest()
-        digest.sort(key=lambda title: title.get("name"))
+        digest.sort(key=lambda title: title.get("time"))
         daily_list = [
-            f'<a href="https://myanimelist.net/anime/{t["mal_aid"]}">{t["name"]}</a>'
+            f'• <a href="https://myanimelist.net/anime/{t["mal_aid"]}">{t["name"]}</a> '
+            f'[{t["time"].isoformat(timespec="minutes")}]'
             for t in digest
         ]
         if daily_list:

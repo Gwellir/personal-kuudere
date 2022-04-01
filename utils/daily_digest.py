@@ -24,6 +24,6 @@ def get_digest():
             continue
         if now_date.weekday() != airdate.weekday():
             continue
-        anime_obj = {"name": name, "mal_aid": malid}
+        anime_obj = {"name": name, "mal_aid": malid, "time": airdate.time()}
         result.append(anime_obj.copy())
     return result
