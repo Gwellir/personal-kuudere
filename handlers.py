@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
+# from handler_modules.url_history.url_cache import URLCache
+
 if TYPE_CHECKING:
     from typing import Dict, List, Union
 
@@ -240,7 +242,6 @@ class HandlersStructure:
                 {"command": ["gif_tag"], "function": self.gif_tags},
                 {"command": ["set_q"], "function": self.quote_set},
                 {"command": ["what", "quote"], "function": self.quotes},
-                {"command": ["torrents", "ongoings"], "function": self.torrents_stats},
                 {"command": ["stats"], "function": self.show_stats},
                 {"command": ["lockout"], "function": self.show_lockouts},
                 {"command": ["future"], "function": self.show_awaited},
@@ -264,6 +265,11 @@ class HandlersStructure:
                 #     "chats": [config.gacha_chat],
                 #     "no_main": True,
                 # },
+                # {
+                #     "message": "all",
+                #     "function": URLCache(),
+                #     "group": 1,
+                # }
             ],
             [
                 # these handlers can be used in private chats with a bot
@@ -285,6 +291,7 @@ class HandlersStructure:
                     "private": True,
                 },
                 {"message": "photo", "function": self.ask_saucenao, "private": True},
+                {"command": ["torrents", "ongoings"], "function": self.torrents_stats, "private": True},
                 # this prevents the bot from replying to a gif with unauthed handler
                 {"message": "gif", "function": self.do_nothing, "private": True},
             ],

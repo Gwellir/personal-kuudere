@@ -1,8 +1,12 @@
 import abc
+from typing import TYPE_CHECKING
 
 from telegram import ParseMode
 
 from orm.ORMWrapper import BaseRelations
+
+if TYPE_CHECKING:
+    from telegram import Message, Update, Chat, User, Bot
 
 
 class HandlerError(Exception):
@@ -20,11 +24,12 @@ class Handler:
         self.br = BaseRelations()
         # self.session = self.br.session
 
-    def __call__(self, update, context):
-        self.bot = context.bot
-        self.message = update.effective_message
-        self.chat = update.effective_chat
-        self.user = update.effective_user
+    def __call__(self, update: Update, context):
+        self.bot: Bot = context.bot
+        self.bot_data = context.bot_data
+        self.message: Message = update.effective_message
+        self.chat: Chat = update.effective_chat
+        self.user: User = update.effective_user
 
         self._run(context.args)
 
@@ -51,7 +56,7 @@ class Handler:
 
     @abc.abstractmethod
     def answer(self, result):
-        self.bot.send_message(chat_id=self.chat.id, text=result)
+        return self.bot.send_message(chat_id=self.chat.id, text=result)
 
 
 class Start(Handler):

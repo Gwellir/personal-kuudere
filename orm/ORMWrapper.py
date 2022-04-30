@@ -1,9 +1,6 @@
-# from pprint import pprint
 from datetime import datetime
-from time import sleep
 from typing import List, Optional
 
-import jikanpy
 from sqlalchemy import (
     Boolean,
     Column,
@@ -32,9 +29,7 @@ from sqlalchemy.dialects.mysql import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql.functions import now
 
-# from datetime import datetime
 import config
 from utils.jikan_custom import JikanCustom
 

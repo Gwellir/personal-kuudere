@@ -141,6 +141,7 @@ class ListImporter:
             "PAUSED": 3,
             "DROPPED": 4,
             "PLANNING": 6,
+            "REPEATING": 2,
         }
         mal_adapted = [
             {
