@@ -9,6 +9,7 @@ from time import sleep
 import requests
 import simplejson
 from jikanpy import exceptions
+from sqlalchemy.exc import IntegrityError
 
 import config
 from handlers import UtilityFunctions
@@ -134,6 +135,7 @@ class ListImporter:
             "FINISHED": 2,
             "RELEASING": 1,
             "NOT_YET_RELEASED": 3,
+            "CANCELLED": 3,
         }
         user_status_dict = {
             "CURRENT": 1,
@@ -157,7 +159,7 @@ class ListImporter:
                 "airing_status": airing_status_dict[item["media"]["status"]],
             }
             for item in page_info
-            if item["media"]["idMal"]
+            if item["media"]["idMal"] and item["media"]["status"]
         ]
         return mal_adapted
 
@@ -196,8 +198,16 @@ class ListImporter:
                     break
             if err_count == config.API_ERROR_LIMIT:
                 anime_list = []
+        test_set = set()
+        checked_list = []
+        for item in anime_list:
+            if item["mal_id"] not in test_set:
+                test_set.add(item["mal_id"])
+                checked_list.append(item)
+            else:
+                print(item["title"], item["mal_id"])
         print(len(anime_list), "items received.")
-        return anime_list
+        return checked_list
 
     def get_animelist_mal(self, user):
         length = user["anime_stats"]["total_entries"]
@@ -284,7 +294,10 @@ class ListImporter:
                 user_id = answer["data"]["User"]["id"]
                 print(user_id)
                 sleep(config.JIKAN_DELAY)
-                self.di.update_users_service_id_for_service_nick(user_id, user_entry[0])
+                try:
+                    self.di.update_users_service_id_for_service_nick(user_id, user_entry[0])
+                except IntegrityError as e:
+                    pass
             else:
                 user_id = user_entry[1]
             alist = self.get_animelist_anilist(user_entry[0])
@@ -399,9 +412,9 @@ class ListImporter:
 
 if __name__ == "__main__":
     li = ListImporter(None, None, None, None, autistic=True)
-    # li.update_mal_list_status("DrumBox")
+    li.update_ani_list_status("MADGODWAR")
     # li.update_all()
     # li.get_anime_season_mal()
-    li.update_seasonal()
+    # li.update_seasonal()
     # br = BaseRelations()
     # ListExtractor(br, DataInterface(br)).save_season_stats_as_json()

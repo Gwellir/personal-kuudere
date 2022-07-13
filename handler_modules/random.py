@@ -46,10 +46,7 @@ class AnimeSelector(Handler):
         self.own_list = True
         self.pool = 0
         self.session = self.br.get_session()
-        if not di:
-            self.di = DataInterface(self.br)
-        else:
-            self.di = di
+        self.di = di if di else DataInterface(self.br)
 
         self.query = None
         self.params = None
@@ -69,14 +66,10 @@ class AnimeSelector(Handler):
         parser.add_argument("-c", "--condition", nargs="+")
         parser.add_argument("-r", "--rating", nargs="+", type=float)
 
-        parsed = None
-        # try:
         parsed, unknown = parser.parse_known_args(opts)
         if unknown:
             err_str = ", ".join(unknown)
             raise HandlerError(f"Неизвестные аргументы: {err_str}")
-        # except argparse.ArgumentError as err:
-        #     raise HandlerError(HELP_MSG)
 
         return parsed
 
