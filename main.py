@@ -5,6 +5,7 @@ from datetime import datetime
 # telegram bot
 from telegram.ext import (
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     Filters,
     InlineQueryHandler,
@@ -92,6 +93,8 @@ if __name__ == "__main__":
                 )
             # elif 'regex' in handler.keys():
             #     dispatcher.add_handler(MessageHandler(Filters.regex(handler['regex']), handler['function']))
+            elif "chat_member" in handler.keys():
+                dispatcher.add_handler(ChatMemberHandler(handler["function"]))
             elif "inline" in handler.keys():
                 dispatcher.add_handler(InlineQueryHandler(handler["function"]))
             elif "callback" in handler.keys():

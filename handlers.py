@@ -25,6 +25,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedMpeg4Gif,
     ParseMode,
+    Update,
 )
 from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
@@ -56,7 +57,7 @@ class HandlersList(
             "private",
             # 'admin_delim',
             "admin",
-            # 'unknown',
+            "chat_join",
             "inline",
             "callbacks",
             "error",
@@ -332,6 +333,10 @@ class HandlersStructure:
                     "function": VotingUpload(),
                     "admin": True,
                 },
+            ],
+            [
+                # handler for chat join requests
+                {"chat_member": "", "function": self.on_chat_join}
             ],
             [
                 # handler for inline bot queries
@@ -1096,6 +1101,17 @@ class HandlersStructure:
             chat_id=update.effective_user.id,
             text=msg,
             parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+    def on_chat_join(self, update: Update, context):
+        event = update.my_chat_member
+        context.bot.send_message(
+            chat_id=config.dev_tg_id,
+            text=f"status change: {event.old_chat_member.status} -> {event.new_chat_member.status}\n"
+            f"chat type: {event.chat.type} '{event.chat.title}' with id {event.chat.id}\n"
+            f"action by: {event.from_user.link}\n"
+            f"member: {event.new_chat_member.user.link}",
             disable_web_page_preview=True,
         )
 
