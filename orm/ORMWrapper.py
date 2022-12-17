@@ -100,19 +100,31 @@ class Anime(Base):
     synced = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     def __repr__(self):
-        return f"<b>Title</b>: %s\n<b>Type</b>: %s\n<b>Status</b>: %s\n<b>Episodes</b>: %s\n<b>Aired</b>: %s to %s\n" f"<b>Score</b>: %s\n<a href='%s'>***</a>\n%s\n\n<b><a href='https://myanimelist.net/anime/%s'>MAL Page</a></b>" % (
-            self.title,
-            self.show_type,
-            self.status,
-            self.episodes if self.episodes else "n/a",
-            self.started_at.date() if self.started_at else "...",
-            self.ended_at.date() if self.ended_at else "...",
-            self.score,
-            self.image_url,
-            (self.synopsis[:500] + (" &lt;...&gt;" if len(self.synopsis) > 500 else ""))
-            if self.synopsis
-            else "[No synopsis available.]",
-            self.mal_aid,
+        return (
+            f"<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
+            f"<b>Type</b>: %s\n"
+            f"<b>Status</b>: %s\n"
+            f"<b>Episodes</b>: %s\n"
+            f"<b>Aired</b>: %s to %s\n"
+            f"<b>Score</b>: %s\n\n"
+            f"%s"
+            % (
+                self.image_url,
+                self.mal_aid,
+                self.title,
+                self.show_type,
+                self.status,
+                self.episodes if self.episodes else "n/a",
+                self.started_at.date() if self.started_at else "...",
+                self.ended_at.date() if self.ended_at else "...",
+                self.score,
+                (
+                    self.synopsis[:500]
+                    + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                )
+                if self.synopsis
+                else "[No synopsis available.]",
+            )
         )
 
 

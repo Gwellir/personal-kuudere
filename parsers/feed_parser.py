@@ -325,7 +325,9 @@ class TorrentFeedParser:
                 a_ep_no = a_ep_no - ep_shift
                 print(mal_id)
                 if not mal_id:
-                    mal_ids = self.di.select_mal_anime_ids_by_title_part(a_title, session)
+                    mal_ids = self.di.select_mal_anime_ids_by_title_part(
+                        a_title, session
+                    )
                     if mal_ids and len(mal_ids) == 1:
                         print(mal_ids[0])
                         mal_id = mal_ids[0]

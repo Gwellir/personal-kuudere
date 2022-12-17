@@ -6,7 +6,7 @@ from telegram import ParseMode
 from orm.ORMWrapper import BaseRelations
 
 if TYPE_CHECKING:
-    from telegram import Message, Update, Chat, User, Bot
+    from telegram import Bot, Chat, Message, Update, User
 
 
 class HandlerError(Exception):
@@ -25,7 +25,7 @@ class Handler:
         self.br = BaseRelations()
         # self.session = self.br.session
 
-    def __call__(self, update: 'Update', context):
+    def __call__(self, update: "Update", context):
         self.bot: Bot = context.bot
         self.bot_data = context.bot_data
         self.message: Message = update.effective_message

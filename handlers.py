@@ -291,7 +291,11 @@ class HandlersStructure:
                     "private": True,
                 },
                 {"message": "photo", "function": self.ask_saucenao, "private": True},
-                {"command": ["torrents", "ongoings"], "function": self.torrents_stats, "private": True},
+                {
+                    "command": ["torrents", "ongoings"],
+                    "function": self.torrents_stats,
+                    "private": True,
+                },
                 # this prevents the bot from replying to a gif with unauthed handler
                 {"message": "gif", "function": self.do_nothing, "private": True},
             ],
@@ -613,7 +617,7 @@ class HandlersStructure:
         list_prefixes = {
             "MAL": "https://myanimelist.net/animelist/%s",
             "Anilist": "https://anilist.co/user/%s/animelist",
-            "Other": "User info is loaded separately.",
+            "Other": "Данные пользователя (%s) загружаются отдельно.",
         }
         list_link = list_prefixes[user_list[1]] % user_list[0]
         context.bot.send_message(
@@ -1056,7 +1060,8 @@ class HandlersStructure:
                     f"@{admin.user.username}"
                     if admin.user.username
                     else admin.user.full_name
-                ) for admin in admins
+                )
+                for admin in admins
             ]
         )
         context.bot.send_message(

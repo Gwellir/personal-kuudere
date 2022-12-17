@@ -295,7 +295,9 @@ class ListImporter:
                 print(user_id)
                 sleep(config.JIKAN_DELAY)
                 try:
-                    self.di.update_users_service_id_for_service_nick(user_id, user_entry[0])
+                    self.di.update_users_service_id_for_service_nick(
+                        user_id, user_entry[0]
+                    )
                 except IntegrityError as e:
                     pass
             else:
