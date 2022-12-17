@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
-from orm.ORMWrapper import Anime
+if TYPE_CHECKING:
+    from orm.ORMWrapper import Anime
 
 MONTH_TO_SEASON = {
     0: "fall",
@@ -61,7 +63,7 @@ def get_season_interval(season_str: str, end_season: str) -> list:
             break
 
 
-def get_actual_seasons(anime: Anime) -> list:
+def get_actual_seasons(anime: "Anime") -> list:
     if anime.premiered:
         start_season = anime.premiered.lower()
     elif anime.started_at:

@@ -136,7 +136,7 @@ class UtilityFunctions:
                 ]
                 extension = " ->\n".join(franchise)
                 # print(extension)
-                output = f"{output}\n<b>Timeline:</b>\n{extension}"
+                output = f"{output}\n\n<b>Timeline:</b>\n{extension}"
         else:
             output = None
         return output
