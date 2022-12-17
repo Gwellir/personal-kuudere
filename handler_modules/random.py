@@ -90,7 +90,11 @@ class AnimeSelector(Handler):
         if users:
             registered_users = (
                 self.session.query(Users)
-                .filter(Users.tg_nick != None, Users.tg_nick.in_(users))
+                .filter(
+                    Users.tg_nick != None,
+                    Users.tg_nick.in_(users),
+                    Users.mal_uid != None,
+                )
                 .with_entities(Users.tg_nick)
             )
             registered_users_list = [
@@ -100,9 +104,9 @@ class AnimeSelector(Handler):
             if wrong_users:
                 users_str = ", ".join(wrong_users)
                 raise HandlerError(
-                    f"Указаны несуществующие пользователи: <code>{users_str}</code>\n"
-                    f"Проверьте, что используется ник из Telegram, и cоответствующий пользователь"
-                    f" зарегистрирован на боте!"
+                    f"Указаны неизвестные пользователи: <code>{users_str}</code>\n"
+                    f"Проверьте, что используется ник из Telegram, cоответствующий пользователь"
+                    f" зарегистрирован на боте и подключил свой список!"
                 )
 
             users = registered_users_list

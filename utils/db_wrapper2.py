@@ -371,7 +371,7 @@ class DataInterface:
         session = self.br.get_session()
         result = (
             session.query(Users)
-            .filter(Users.tg_id == tg_id)
+            .filter(Users.tg_id == tg_id, Users.mal_uid != None)
             .with_entities(Users.mal_nick, Users.service)
         )
         session.close()
