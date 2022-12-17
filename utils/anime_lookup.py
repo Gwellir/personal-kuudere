@@ -86,7 +86,7 @@ class AnimeLookup:
             "anime",
             name,
         )
-        results = response.get("results")
+        results = response if response else []
         if ongoing:
             return self._filter_ongoing(results)
         return results
