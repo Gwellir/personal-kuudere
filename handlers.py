@@ -237,7 +237,11 @@ class HandlersStructure:
                     "chats": [config.gacha_chat],
                 },
                 {"command": ["seen"], "function": self.users_seen_anime},
-                {"command": ["anime"], "function": self.show_anime},
+                {
+                    "command": ["anime"],
+                    "function": self.show_anime,
+                    "chats": [config.gacha_chat],
+                },
                 {"command": ["user_info"], "function": self.show_user_info},
                 {"command": ["gif_tag"], "function": self.gif_tags},
                 {"command": ["set_q"], "function": self.quote_set},
