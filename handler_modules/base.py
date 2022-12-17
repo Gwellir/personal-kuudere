@@ -19,12 +19,13 @@ class HandlerError(Exception):
 
 class Handler:
     command = None
+    answer_template: str = None
 
     def __init__(self):
         self.br = BaseRelations()
         # self.session = self.br.session
 
-    def __call__(self, update: Update, context):
+    def __call__(self, update: 'Update', context):
         self.bot: Bot = context.bot
         self.bot_data = context.bot_data
         self.message: Message = update.effective_message
