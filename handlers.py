@@ -25,6 +25,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedMpeg4Gif,
     ParseMode,
+    Update,
 )
 from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
@@ -56,7 +57,7 @@ class HandlersList(
             "private",
             # 'admin_delim',
             "admin",
-            # 'unknown',
+            "chat_join",
             "inline",
             "callbacks",
             "error",
@@ -135,7 +136,7 @@ class UtilityFunctions:
                 ]
                 extension = " ->\n".join(franchise)
                 # print(extension)
-                output = f"{output}\n<b>Timeline:</b>\n{extension}"
+                output = f"{output}\n\n<b>Timeline:</b>\n{extension}"
         else:
             output = None
         return output
@@ -237,7 +238,11 @@ class HandlersStructure:
                     "chats": [config.gacha_chat],
                 },
                 {"command": ["seen"], "function": self.users_seen_anime},
-                {"command": ["anime"], "function": self.show_anime},
+                {
+                    "command": ["anime"],
+                    "function": self.show_anime,
+                    "chats": [config.gacha_chat],
+                },
                 {"command": ["user_info"], "function": self.show_user_info},
                 {"command": ["gif_tag"], "function": self.gif_tags},
                 {"command": ["set_q"], "function": self.quote_set},
@@ -291,7 +296,11 @@ class HandlersStructure:
                     "private": True,
                 },
                 {"message": "photo", "function": self.ask_saucenao, "private": True},
-                {"command": ["torrents", "ongoings"], "function": self.torrents_stats, "private": True},
+                {
+                    "command": ["torrents", "ongoings"],
+                    "function": self.torrents_stats,
+                    "private": True,
+                },
                 # this prevents the bot from replying to a gif with unauthed handler
                 {"message": "gif", "function": self.do_nothing, "private": True},
             ],
@@ -324,6 +333,10 @@ class HandlersStructure:
                     "function": VotingUpload(),
                     "admin": True,
                 },
+            ],
+            [
+                # handler for chat join requests
+                {"chat_member": "", "function": self.on_chat_join}
             ],
             [
                 # handler for inline bot queries
@@ -613,7 +626,7 @@ class HandlersStructure:
         list_prefixes = {
             "MAL": "https://myanimelist.net/animelist/%s",
             "Anilist": "https://anilist.co/user/%s/animelist",
-            "Other": "User info is loaded separately.",
+            "Other": "Данные пользователя (%s) загружаются отдельно.",
         }
         list_link = list_prefixes[user_list[1]] % user_list[0]
         context.bot.send_message(
@@ -1056,7 +1069,8 @@ class HandlersStructure:
                     f"@{admin.user.username}"
                     if admin.user.username
                     else admin.user.full_name
-                ) for admin in admins
+                )
+                for admin in admins
             ]
         )
         context.bot.send_message(
@@ -1087,6 +1101,17 @@ class HandlersStructure:
             chat_id=update.effective_user.id,
             text=msg,
             parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+    def on_chat_join(self, update: Update, context):
+        event = update.my_chat_member
+        context.bot.send_message(
+            chat_id=config.dev_tg_id,
+            text=f"status change: {event.old_chat_member.status} -> {event.new_chat_member.status}\n"
+            f"chat type: {event.chat.type} '{event.chat.title}' with id {event.chat.id}\n"
+            f"action by: {event.from_user.link}\n"
+            f"member: {event.new_chat_member.user.link}",
             disable_web_page_preview=True,
         )
 

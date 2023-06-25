@@ -371,7 +371,7 @@ class DataInterface:
         session = self.br.get_session()
         result = (
             session.query(Users)
-            .filter(Users.tg_id == tg_id)
+            .filter(Users.tg_id == tg_id, Users.mal_uid != None)
             .with_entities(Users.mal_nick, Users.service)
         )
         session.close()
@@ -439,6 +439,7 @@ class DataInterface:
             .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
             .filter(Anime.title.like(f"%{title}%"))
             .filter(Anime.show_type.in_(TYPE_LIST))
+            .filter(Anime.status != "Finished Airing")
             .with_entities(Ongoings.mal_aid, Anime.title)
         )
         session.close()
@@ -938,7 +939,7 @@ class DataInterface:
     # @staticmethod
     def insert_new_licensors(self, licensor_list, session):
         for licensor in licensor_list:
-            new_licensor = Licensors(name=licensor)
+            new_licensor = Licensors(name=licensor["name"])
             session.add(new_licensor)
 
     # @staticmethod
@@ -979,7 +980,7 @@ class DataInterface:
         ]
         for licensor in new_axl:
             licensor_ = (
-                session.query(Licensors).filter(Licensors.name == licensor).first()
+                session.query(Licensors).filter(Licensors.name == licensor["name"]).first()
             )
             anime_.licensors.append(licensor_)
 
@@ -989,14 +990,7 @@ class DataInterface:
         for anime in anime_list:
             list_entry = ListStatus(
                 user_id=mal_uid,
-                mal_aid=anime["mal_id"],
-                title=anime["title"],
-                show_type=anime["type"],
-                status=anime["watching_status"],
-                watched=anime["watched_episodes"],
-                eps=anime["total_episodes"],
-                score=anime["score"],
-                airing=anime["airing_status"],
+                **anime,
             )
             session.add(list_entry)
         session.commit()
@@ -1142,7 +1136,7 @@ class DataInterface:
         session.close()
 
     # Feed parser update methods
-    # todo not sure it's actually needed
+    # todo not sure if it's actually needed
     # @staticmethod
     def update_anifeeds_entry(self, a_link, a_description, a_title, a_date, session):
         feed_entry = (

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+from logger.logger import ANIMEBASE_LOG
+
 
 class AnimeLookup:
     def __init__(self, jikan, data_interface):
@@ -82,23 +84,31 @@ class AnimeLookup:
         return mal_info
 
     def mal_search_by_name(self, name: str, ongoing=False) -> list:
+        params = dict()
+        if ongoing:
+            params["status"] = "airing"
         response = self._jikan.search(
             "anime",
             name,
+            parameters=params,
         )
-        results = response.get("results")
+        results = response if response else []
+        ANIMEBASE_LOG.debug(
+            f"Searching MAL for '{name}'({ongoing}): {[(res['title'], res['mal_id']) for res in results]}"
+        )
         if ongoing:
             return self._filter_ongoing(results)
         return results
 
     def _filter_ongoing(self, results: list) -> list:
         ong_types = ["TV", "ONA", "OVA"]
-        ratings = ["PG-13", "R", "R+"]
+        ratings = ["G - All Ages", "PG-13 - Teens 13 or older", "R - 17+ (violence & profanity)", "R+ - Mild Nudity"]
         filtered = [
             res
             for res in results
             if res.get("type") in ong_types
-            and res.get("rated") in ratings
-            and res.get("airing")
+            and res.get("rating") in ratings
+            and res.get("airing") is True
         ]
+        ANIMEBASE_LOG.debug(f"Filtered airing MAL results: {filtered}")
         return filtered

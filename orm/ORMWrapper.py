@@ -41,7 +41,7 @@ class BaseRelations:
     def __init__(self):
         self._engine = create_engine(
             config.DB.db_url,
-            echo=True,
+            # echo=True,
             pool_pre_ping=True,
             pool_recycle=3600,
             poolclass=NullPool,
@@ -100,19 +100,31 @@ class Anime(Base):
     synced = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     def __repr__(self):
-        return f"<b>Title</b>: %s\n<b>Type</b>: %s\n<b>Status</b>: %s\n<b>Episodes</b>: %s\n<b>Aired</b>: %s to %s\n" f"<b>Score</b>: %s\n<a href='%s'>***</a>\n%s\n\n<b><a href='https://myanimelist.net/anime/%s'>MAL Page</a></b>" % (
-            self.title,
-            self.show_type,
-            self.status,
-            self.episodes if self.episodes else "n/a",
-            self.started_at.date() if self.started_at else "...",
-            self.ended_at.date() if self.ended_at else "...",
-            self.score,
-            self.image_url,
-            (self.synopsis[:500] + (" &lt;...&gt;" if len(self.synopsis) > 500 else ""))
-            if self.synopsis
-            else "[No synopsis available.]",
-            self.mal_aid,
+        return (
+            f"<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
+            f"<b>Type</b>: %s\n"
+            f"<b>Status</b>: %s\n"
+            f"<b>Episodes</b>: %s\n"
+            f"<b>Aired</b>: %s to %s\n"
+            f"<b>Score</b>: %s\n\n"
+            f"%s"
+            % (
+                self.image_url,
+                self.mal_aid,
+                self.title,
+                self.show_type,
+                self.status,
+                self.episodes if self.episodes else "n/a",
+                self.started_at.date() if self.started_at else "...",
+                self.ended_at.date() if self.ended_at else "...",
+                self.score,
+                (
+                    self.synopsis[:500]
+                    + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                )
+                if self.synopsis
+                else "[No synopsis available.]",
+            )
         )
 
 
@@ -136,8 +148,8 @@ class Characters(Base):
     def get_or_create(cls, cid, session) -> Optional["Characters"]:
         char = session.query(Characters).filter_by(mal_cid=cid).first()
         if not char:
-            remote_char = jikan.character(cid)
-            anime_ids = [entry["mal_id"] for entry in remote_char["animeography"]]
+            remote_char = jikan.character(cid, "full")
+            anime_ids = [entry.get("anime").get("mal_id") for entry in remote_char["anime"]]
             related_anime = (
                 session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()
             )
@@ -146,7 +158,7 @@ class Characters(Base):
                 name=remote_char["name"],
                 name_kanji=remote_char["name_kanji"],
                 about=remote_char["about"],
-                image_url=remote_char["image_url"],
+                image_url=remote_char.get("images").get("jpg").get("image_url"),
                 anime=related_anime,
             )
             session.add(char)
