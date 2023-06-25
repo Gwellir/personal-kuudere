@@ -32,7 +32,10 @@ from torrentool.torrent import Torrent
 
 import config
 from handler_modules.random import AnimeFilter, AnimeSelector
-from handler_modules.voting import Nominate, ShowCandidates, Voting, VotingUpload
+from handler_modules.voting_system.voting import Voting
+from handler_modules.voting_system.show_candidates import ShowCandidates
+from handler_modules.voting_system.voting_upload import VotingUpload
+from handler_modules.voting_system.nominate import Nominate
 from utils.expiring_set import ExpiringSet
 
 # todo inline keyboard builder shouldn't be here
