@@ -16,6 +16,9 @@ API_ERROR_LIMIT = 20
 JIKAN_MAX_QUERY_LENGTH = 100
 JIKAN_DELAY = 5
 
+MAL_API_TOKEN = os.getenv("MAL_API_TOKEN")
+MAL_API_LIST_PAGE_SIZE = int(os.getenv("MAL_API_LIST_PAGE_SIZE"))
+
 season_stats_file = os.getenv("SEASON_STATS_FILE")
 
 

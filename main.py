@@ -11,6 +11,7 @@ from telegram.ext import (
     InlineQueryHandler,
     MessageHandler,
     Updater,
+    Dispatcher,
 )
 
 # tokens
@@ -18,13 +19,9 @@ import config
 
 # my imports
 from core import BotCore
+from logger.logger import TELEGRAM_LOG
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        handlers=[logging.FileHandler(filename="log/tgbot.log", encoding="utf-8")],
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=logging.INFO,
-    )
 
     def get_handler_filters(handler: dict):
         filters = Filters.chat(config.dev_tg_id)
@@ -39,13 +36,15 @@ if __name__ == "__main__":
         return filters
 
     # telegram.ext initialization
-    updater = Updater(token=config.token, use_context=True)
-    dispatcher = updater.dispatcher
+    updater: Updater = Updater(token=config.token, use_context=True)
+    dispatcher: Dispatcher = updater.dispatcher
+    TELEGRAM_LOG.debug(f"Init updater and dispatcher for bot: {dispatcher.bot.get_me()}")
 
     core = BotCore(updater)
 
     job_queue = updater.job_queue
     dispatcher.bot_data.update(job_queue=job_queue)
+    TELEGRAM_LOG.debug(f"Init job queue...")
 
     job_feeds = job_queue.run_repeating(core.jobs.update_nyaa, interval=600, first=10)
     core.jobs.update_continuations(None)
@@ -102,7 +101,10 @@ if __name__ == "__main__":
             elif "error" in handler.keys():
                 dispatcher.add_error_handler(handler["function"])
 
+    TELEGRAM_LOG.debug(f"Init handlers...")
+
     updater.bot.send_message(chat_id=config.dev_tg_id, text="Waking up...")
 
     updater.start_polling()
+    TELEGRAM_LOG.info("Bot started.")
     updater.idle()

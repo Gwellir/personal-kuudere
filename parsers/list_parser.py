@@ -6,6 +6,7 @@ from datetime import datetime
 from pprint import pprint
 from time import sleep
 
+import jikanpy
 import requests
 import simplejson
 from jikanpy import exceptions
@@ -102,7 +103,7 @@ class ListImporter:
 
     def get_anime_season_mal(self, y=None, s=None, later=False, shift=0):
         if later:
-            seasonal_anime_response = self.jikan.season_later()
+            seasonal_anime = self.jikan.season_later()
         else:
             if shift != 0:
                 shifted_month = datetime.now().month + shift * 3
@@ -114,13 +115,12 @@ class ListImporter:
             else:
                 year = y
                 season = s
-            seasonal_anime_response = self.jikan.season(year=year, season=season)
-        seasonal_anime = seasonal_anime_response["anime"]
+            seasonal_anime = self.jikan.season(year=year, season=season)
         print(len(seasonal_anime))
         for item in seasonal_anime:
             print(
                 f"{item['mal_id']:>5}",
-                item["airing_start"][:10] if item["airing_start"] else None,
+                item["aired"]["from"][:10] if item["aired"]["from"] else None,
                 item["type"],
                 item["score"],
                 item["title"],
@@ -147,16 +147,16 @@ class ListImporter:
         }
         mal_adapted = [
             {
-                "mal_id": item["media"]["idMal"],
+                "mal_aid": item["media"]["idMal"],
                 "title": item["media"]["title"]["romaji"],
-                "type": item["media"]["format"]
+                "show_type": item["media"]["format"]
                 if item["media"]["format"] != "TV_SHORT"
                 else "TV",
-                "watching_status": user_status_dict[item["status"]],
-                "watched_episodes": item["progress"],
-                "total_episodes": item["media"]["episodes"],
+                "status": user_status_dict[item["status"]],
+                "watched": item["progress"],
+                "eps": item["media"]["episodes"],
                 "score": item["score"],
-                "airing_status": airing_status_dict[item["media"]["status"]],
+                "airing": airing_status_dict[item["media"]["status"]],
             }
             for item in page_info
             if item["media"]["idMal"] and item["media"]["status"]
@@ -201,43 +201,29 @@ class ListImporter:
         test_set = set()
         checked_list = []
         for item in anime_list:
-            if item["mal_id"] not in test_set:
-                test_set.add(item["mal_id"])
+            if item["mal_aid"] not in test_set:
+                test_set.add(item["mal_aid"])
                 checked_list.append(item)
             else:
-                print(item["title"], item["mal_id"])
+                print(item["title"], item["mal_aid"])
         print(len(anime_list), "items received.")
         return checked_list
 
     def get_animelist_mal(self, user):
-        length = user["anime_stats"]["total_entries"]
+        length = user['statistics']['anime']['total_entries']
         print(user["username"], length)
-        # answer = user_list_load(user)
-        answer = None
-        curr_page = 0
-        anime_list = []
-        if not answer:
-            while curr_page < length / PAGE_SIZE:
-                answer = self.jikan.user(
-                    username=user["username"],
-                    request="animelist",
-                    argument="all",
-                    page=curr_page + 1,
-                    # parameters={'sort': 'descending', 'order_by': 'score'}
-                )
-                print(curr_page)
-                anime_list += answer["anime"]
-                curr_page += 1
-                if not answer:
-                    break
+        anime_list = self.jikan.userlist(
+            username=user["username"],
+            request="animelist",
+        )
         test_set = set()
         checked_list = []
         for item in anime_list:
-            if item["mal_id"] not in test_set:
-                test_set.add(item["mal_id"])
+            if item["mal_aid"] not in test_set:
+                test_set.add(item["mal_aid"])
                 checked_list.append(item)
             else:
-                print(item["title"], item["mal_id"])
+                print(item["title"], item["mal_aid"])
         #     print(f"{item['mal_id']:<5} {item['type']:<5} {item['score']:>2} {item['title']}")
         print(len(anime_list), "items received.")
         return checked_list
@@ -248,24 +234,24 @@ class ListImporter:
         else:
             userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
-            user = self.jikan.user(username=user_entry[0])
+            user = self.jikan.user(username=user_entry[0], request="full")
             print(user["username"], "-> got profile data")
             if not user_entry[1]:
                 self.di.update_users_service_id_for_service_nick(
-                    user["user_id"], user["username"]
+                    user["mal_id"], user["username"]
                 )
             alist = self.get_animelist_mal(user)
-            have_user = self.di.select_user_is_in_list_status(user["user_id"]).first()
+            have_user = self.di.select_user_is_in_list_status(user["mal_id"]).first()
             if alist and have_user:
-                self.di.delete_list_by_user_id(user["user_id"])
+                self.di.delete_list_by_user_id(user["mal_id"])
             elif not alist:
                 return False
             self.check_anime_table_has_anime(alist)
 
-            self.di.insert_new_animelist(user["user_id"], alist)
+            self.di.insert_new_animelist(user["mal_id"], alist)
 
     def check_anime_table_has_anime(self, alist):
-        anime_ids = set([anime["mal_id"] for anime in alist])
+        anime_ids = set([anime["mal_aid"] for anime in alist])
         all_ids = set([e[0] for e in self.di.select_all_anime_ids().all()])
         missing = anime_ids - all_ids
         pprint(missing)
@@ -312,7 +298,7 @@ class ListImporter:
             lost = self.check_anime_table_has_anime(alist)
 
             self.di.insert_new_animelist(
-                user_id, [a for a in alist if not a["mal_id"] in lost]
+                user_id, [a for a in alist if not a["mal_aid"] in lost]
             )
 
     def update_seasonal(self):
@@ -340,10 +326,10 @@ class ListImporter:
             or anime["synopsis"] != stored_entry.synopsis
             or anime["type"] != stored_entry.show_type
             or (
-                anime["airing_start"]
+                anime["aired"]["from"]
                 and (
                     not stored_entry.started_at
-                    or anime["airing_start"][:10] != str(stored_entry.started_at)[:10]
+                    or anime["aired"]["from"][:10] != str(stored_entry.started_at)[:10]
                 )
             )
             or anime["episodes"] != stored_entry.episodes
@@ -363,6 +349,16 @@ class ListImporter:
         session = self.di.br.get_session()
         for anime in anime_list:
             print(f'> {anime["title"]}')
+            if changed := self.has_changed(anime, session):
+                try:
+                    remote_entry = self.jikan.anime(anime["mal_id"])
+                except jikanpy.APIException:
+                    print(">>> DOESN'T EXIST!!!")
+                    continue
+                pprint(remote_entry)
+                self.di.upsert_anime_entry(remote_entry, session)
+
+            # sleep(2)
             if anime["genres"]:
                 new_genres = [
                     genre
@@ -372,10 +368,12 @@ class ListImporter:
                 self.di.insert_new_genres(new_genres, session)
                 genre_list.extend([genre["mal_id"] for genre in new_genres])
             if anime["licensors"]:
+                # todo remake properly
                 new_licensors = [
                     licensor
                     for licensor in anime["licensors"]
-                    if licensor.lower() not in licensor_list
+                    if licensor["name"].lower() not in licensor_list
+                    and licensor["name"] is not None
                 ]
                 print(new_licensors)
                 self.di.insert_new_licensors(new_licensors, session)
@@ -390,15 +388,10 @@ class ListImporter:
                 self.di.insert_new_producers(new_producers, session)
                 producer_list.extend([producer["mal_id"] for producer in new_producers])
             # if not ani_db.select('mal_aid', 'anime', f"mal_aid = %s", [anime['mal_id']]):
-            if self.has_changed(anime, session):
-                remote_entry = self.jikan.anime(anime["mal_id"])
-                pprint(remote_entry)
-                self.di.upsert_anime_entry(remote_entry, session)
-                # new_list.append(anime)
+            if changed:
                 self.di.insert_new_axg(anime, session)
                 self.di.insert_new_axp(anime, session)
                 self.di.insert_new_axl(anime, session)
-            # sleep(2)
         if season_name:
             cross_data = [
                 {
@@ -414,9 +407,11 @@ class ListImporter:
 
 if __name__ == "__main__":
     li = ListImporter(None, None, None, None, autistic=True)
-    li.update_ani_list_status("MADGODWAR")
+    # li.update_ani_list_status("MADGODWAR")
+    # li.update_mal_list_status()
     # li.update_all()
+
     # li.get_anime_season_mal()
-    # li.update_seasonal()
-    # br = BaseRelations()
-    # ListExtractor(br, DataInterface(br)).save_season_stats_as_json()
+    li.update_seasonal()
+    br = BaseRelations()
+    ListExtractor(br, DataInterface(br)).save_season_stats_as_json()

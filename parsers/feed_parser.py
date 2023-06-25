@@ -3,14 +3,15 @@
 import re
 import sys
 from datetime import datetime, timedelta
+from typing import Optional
 
 import feedparser
 import requests
-from colorama import Fore, Style
 from Levenshtein import distance
 from pytz import timezone
 
 import config
+from logger.logger import FEEDPARSER_LOG
 
 RESOLUTIONS = {
     "360p": 480,
@@ -31,7 +32,7 @@ match_punct = re.compile(r"[/)(,:.!?+*☆♥★-]")
 
 
 # todo well, this is a piece of shit
-def get_closest_match_aid(variants, title):
+def get_closest_match_aid(variants, title) -> Optional[int]:
     min_dist = 6
     closest_match = None
     for v in variants:
@@ -125,7 +126,7 @@ def parse_feed_title(a_title: str):
             a_group = tags_in_round[0]
     all_tags.extend(tags_in_square + tags_in_round)
 
-    print(f"{Fore.BLUE}{all_tags}{Style.RESET_ALL}")
+    FEEDPARSER_LOG.info(f"Tags: {all_tags}")
     a_res = get_resolution_from_tags(all_tags)
     extension = match_extension.match(a_title)
     if extension:
@@ -163,7 +164,12 @@ class TorrentFeedParser:
     <Should be split up and named NyaaFeedParser after logic is changed to support multiple feed sources>
     """
 
-    MY_FEEDS = ["https://nyaa.si/?page=rss&c=1_2&f=2"]
+    MY_FEEDS = [
+        "https://nyaa.si/?page=rss&c=1_2&f=2",
+        "https://nyaa.si/?page=rss&u=AkihitoSubsWeeklies",
+        "https://nyaa.si/?page=rss&u=Ember_Encodes",
+        "https://nyaa.si/?page=rss&u=sff",
+    ]
     nyaa_time_fmt = "%a, %d %b %Y %H:%M:%S %z"
 
     def __init__(self, data_interface, anime_lookup):
@@ -231,7 +237,7 @@ class TorrentFeedParser:
                 )
             ]
         entries.reverse()
-        # pprint(entries)
+        FEEDPARSER_LOG.info(f"Pulled {len(entries)}/{len(parsed_feed['entries'])} new entries from '{rss_feed}'")
         for article in entries:
             # todo suboptimal - calculating these twice
             dt = article.published_parsed
@@ -244,8 +250,8 @@ class TorrentFeedParser:
                 article["description"],
                 session,
             )
-            print(
-                f"{article.title}\n{article.link}\n{article.description}\n{article.published}"
+            FEEDPARSER_LOG.info(
+                f"Entry - {article.title} >> {article.link} >> {article.description} >> {article.published}"
             )
 
     def check_feeds(self):
@@ -259,6 +265,7 @@ class TorrentFeedParser:
         for feed in self.MY_FEEDS:
             self.read_article_feed(feed, session)
         release_list = self.di.select_unchecked_feed_entries(session).all()
+        FEEDPARSER_LOG.info(f"Found {len(release_list)} unchecked entries in feeds table")
         for release in release_list:
             result = self.do_recognize(
                 release.title,
@@ -284,17 +291,22 @@ class TorrentFeedParser:
         query = lines[0]
         mal_id = None
         search_results = self.al.mal_search_by_name(query, ongoing=True)
+        FEEDPARSER_LOG.debug(f"Found on MAL: {search_results}")
         # test for legit episode numbers as MAL sometimes returns very strange title matches
         mal_ids = [
-            (result["mal_id"],)
+            result["mal_id"]
             for result in search_results
-            if (result["episodes"] == 0 or result["episodes"] >= a_ep_no)
+            # if (
+            #         result["episodes"] is not None
+            #         and (result["episodes"] == 0 or result["episodes"] >= a_ep_no)
+            # )
         ]
 
-        print(f"Can't get a precise result... {mal_ids}")
-        if search_results:
+        FEEDPARSER_LOG.warning(f"Failed to resolve '{a_title}' precisely: {mal_ids}")
+        if search_results and len(search_results) > 1:
             mal_id = get_closest_match_aid(search_results, query.lower())
-
+        elif search_results:
+            mal_id = mal_ids[0]
         return mal_id
 
     # todo batch parsing and delivery (possibly subscribe for complete seasons?)
@@ -312,24 +324,29 @@ class TorrentFeedParser:
         :return:
         """
         save_title = a_title
+        # todo parse title, should be replaced with anitopy I guess
         a_ep_no, a_group, a_title, a_res, a_ext = parse_feed_title(a_title)
+
+        # possible recognizable ongoing
         if a_ep_no and a_group and a_title:
-            print(
+            FEEDPARSER_LOG.info(
                 f'"{a_title}" #{a_ep_no} by [{a_group}], res ({a_res if a_res else "n/a"})'
                 f' ext ({a_ext if a_ext else "n/a"})'
             )
+            # exact synonym match to title only
             mal_id, ep_shift = self.di.select_ongoing_anime_id_by_synonym(
                 a_title, session
             )
             if ep_shift <= a_ep_no:
                 a_ep_no = a_ep_no - ep_shift
-                print(mal_id)
+                FEEDPARSER_LOG.info(f"Synonym match: {mal_id}")
                 if not mal_id:
                     mal_ids = self.di.select_mal_anime_ids_by_title_part(
                         a_title, session
                     )
+                    FEEDPARSER_LOG.info(f"Searching for '*{a_title}*' in ongoings... Found {mal_ids}")
                     if mal_ids and len(mal_ids) == 1:
-                        print(mal_ids[0])
+                        FEEDPARSER_LOG.info(f"Title part match: {mal_ids[0]}")
                         mal_id = mal_ids[0]
                     # elif not mal_ids:
                     # todo unify lurking and title comparison
@@ -354,7 +371,7 @@ class TorrentFeedParser:
                 return mal_id, a_group, a_ep_no, torrent_link, a_title, a_res, file_size
 
         else:
-            print(f'{Fore.RED}Not recognized "{save_title}"{Style.RESET_ALL}')
+            FEEDPARSER_LOG.info(f'Not recognized "{save_title}"')
             self.di.update_anifeeds_unrecognized_entry(
                 file_size, save_title, a_date, session
             )
@@ -376,7 +393,7 @@ class TorrentFeedParser:
         """
         approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id, session).one()
         if approved_ep and int(episode) > approved_ep[0]:
-            print(f"  >>> FAKE {title} - {episode} by {group}")
+            FEEDPARSER_LOG.info(f"  >>> FAKE {title} - {episode} by {group}")
             return
         is_downloaded = False
         title = re.sub(r"[|/\\?:<>]", " ", title)
@@ -392,7 +409,7 @@ class TorrentFeedParser:
             f.write(r.content)
             is_downloaded = True
             f.close()
-            print(
+            FEEDPARSER_LOG.info(
                 f'Downloaded "{link}" for {title}({mal_id}) ep {episode} from {group}, size - {size}'
             )
         if is_downloaded:
@@ -404,7 +421,7 @@ class TorrentFeedParser:
                     mal_id, group, episode, filename, res, size, session
                 )
             else:
-                print("DUPLICATE ", [mal_id, group, episode, res, size])
+                FEEDPARSER_LOG.info(f"DUPLICATE: {mal_id} by {group} ep.{episode} res {res} size {size}")
             return filename
         else:
             return False

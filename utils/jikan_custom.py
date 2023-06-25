@@ -1,7 +1,7 @@
 import datetime
 import http.client
 from time import sleep
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import jikanpy
 import requests
@@ -16,11 +16,12 @@ LAST_HIT = datetime.datetime(1970, 1, 1)
 def retried(func):
     def wrapped(*args, **kwargs):
         global LAST_HIT
-        result = None
+        result = done = None
         err_count = 0
-        while not result and err_count <= config.API_ERROR_LIMIT:
+        while not done and err_count <= config.API_ERROR_LIMIT:
             try:
                 result = func(*args, **kwargs)
+                done = True
                 if (
                     interval := datetime.datetime.now() - LAST_HIT
                 ) < datetime.timedelta(seconds=config.JIKAN_DELAY):
@@ -41,7 +42,7 @@ def retried(func):
                 err_count += 1
                 wait_s = config.JIKAN_DELAY * err_count
                 print(
-                    f"JIKAN inaccessible x{err_count}: waiting for {wait_s} seconds..."
+                    f"API inaccessible x{err_count}: waiting for {wait_s} seconds..."
                 )
                 sleep(wait_s)
                 continue
@@ -182,14 +183,99 @@ class JikanCustom:
     def search(self, *args, **kwargs):
         return self._jikan.search(*args, **kwargs).get("data")
 
-    @retried
-    def season(self, *args, **kwargs):
-        return self._jikan.season(*args, **kwargs).get("data")
+    def season(self, page: Optional[int] = None, *args, **kwargs):
+        @retried
+        def get_season_page():
+            return self._jikan.season(page=page, *args, **kwargs).get("data")
 
-    @retried
-    def season_later(self, *args, **kwargs):
-        return self._jikan.season_later().get("data")
+        done = False
+        page = 1
+        data = []
+        while not done:
+            results = get_season_page()
+            data.extend(results)
+
+            if results:
+                page += 1
+            else:
+                done = True
+
+        return data
+
+    def season_later(self, page: Optional[int] = None, *args, **kwargs):
+
+        return self.season(page=page, upcoming=True, *args, **kwargs)
 
     @retried
     def user(self, *args, **kwargs):
         return self._jikan.user(*args, **kwargs).get("data")
+
+    def _get_normalized_animelist(self, results):
+
+        airing_dict = {
+            "finished_airing": 2,
+            "currently_airing": 1,
+            "not_yet_aired": 3,
+        }
+        status_dict = {
+            "watching": 1,
+            "completed": 2,
+            "on_hold": 3,
+            "dropped": 4,
+            "plan_to_watch": 6,
+        }
+        normalized_results = []
+        for entry in results:
+            anime = entry.get("node")
+            list_status = entry.get("list_status")
+            normalized_results.append(
+                dict(
+                    mal_aid=anime.get("id"),
+                    title=anime.get("title"),
+                    show_type=anime.get("media_type"),
+                    status=status_dict.get(list_status.get("status")),
+                    watched=list_status.get("num_episodes_watched"),
+                    eps=anime.get("num_episodes"),
+                    score=list_status.get("score"),
+                    airing=airing_dict.get(anime.get("status")),
+                )
+            )
+
+        return normalized_results
+
+    def userlist(self, username, request: str = "animelist"):
+        @retried
+        def get_userlist_part():
+            return requests.get(
+                f"{base_url}/{username}/{request}",
+                headers={"X-MAL-CLIENT-ID": token},
+                params=params,
+            ).json()
+
+        base_url = "https://api.myanimelist.net/v2/users"
+        token = config.MAL_API_TOKEN
+        page_size = config.MAL_API_LIST_PAGE_SIZE
+        done = False
+        offset = 0
+        data = []
+        while not done:
+            if request == "animelist":
+                fields = ["media_type", "status", "list_status", "num_episodes"]
+                params = dict(
+                    limit=page_size,
+                    offset=offset,
+                    fields=','.join(fields),
+                    nsfw=1,
+                )
+                results = get_userlist_part()
+                data.extend(self._get_normalized_animelist(results.get("data")))
+            else:
+                raise NotImplementedError(f"Userlist processing for request '{request}' is not implemented!")
+
+            if results.get("paging").get("next"):
+                offset += page_size
+                params["offset"] = offset
+            else:
+                done = True
+
+        return data

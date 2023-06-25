@@ -1,5 +1,7 @@
+.env
 
 old/
+sql/
 
 log/
 
@@ -8,8 +10,6 @@ torrents/
 __pycache__/
 
 .idea/
-
-sql/dump-*.sql
 
 spam/
 

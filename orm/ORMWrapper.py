@@ -41,7 +41,7 @@ class BaseRelations:
     def __init__(self):
         self._engine = create_engine(
             config.DB.db_url,
-            echo=True,
+            # echo=True,
             pool_pre_ping=True,
             pool_recycle=3600,
             poolclass=NullPool,
@@ -148,8 +148,8 @@ class Characters(Base):
     def get_or_create(cls, cid, session) -> Optional["Characters"]:
         char = session.query(Characters).filter_by(mal_cid=cid).first()
         if not char:
-            remote_char = jikan.character(cid)
-            anime_ids = [entry["mal_id"] for entry in remote_char["animeography"]]
+            remote_char = jikan.character(cid, "full")
+            anime_ids = [entry.get("anime").get("mal_id") for entry in remote_char["anime"]]
             related_anime = (
                 session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()
             )
@@ -158,7 +158,7 @@ class Characters(Base):
                 name=remote_char["name"],
                 name_kanji=remote_char["name_kanji"],
                 about=remote_char["about"],
-                image_url=remote_char["image_url"],
+                image_url=remote_char.get("images").get("jpg").get("image_url"),
                 anime=related_anime,
             )
             session.add(char)
