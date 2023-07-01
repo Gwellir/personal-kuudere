@@ -3,7 +3,7 @@ from pprint import pprint
 
 from sqlalchemy.exc import IntegrityError
 
-from handler_modules.voting_system.exceptions import VotingCompletedError
+from .exceptions import VotingCompletedError
 from orm.ORMWrapper import Anime, SeasonalVotings
 
 from handler_modules.base import Handler

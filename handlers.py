@@ -31,7 +31,7 @@ from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
 
 import config
-from handler_modules.random import AnimeFilter, AnimeSelector
+from handler_modules.random_anime import AnimeFilter, AnimeSelector
 from handler_modules.voting_system.voting import Voting
 from handler_modules.voting_system.show_candidates import ShowCandidates
 from handler_modules.voting_system.voting_upload import VotingUpload
@@ -177,6 +177,8 @@ class UtilityFunctions:
                 next_id = int(self.relations[chain[0]]["Sequel"][0]["mal_id"])
                 chain.append(next_id)
             except KeyError as e:
+                if type(e.args[0]) == int:
+                    self.al.get_anime_by_aid(e.args[0])
                 print("ERROR:", e.args)
             i = 1
             try:

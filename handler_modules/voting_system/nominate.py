@@ -2,8 +2,8 @@ import re
 
 from sqlalchemy.exc import IntegrityError
 
+from .exceptions import CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError
 from handler_modules.base import Handler
-from handler_modules.voting_system.exceptions import CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError
 from orm.ORMWrapper import SeasonalVotings, Characters, Anime, VotedCharacters
 
 

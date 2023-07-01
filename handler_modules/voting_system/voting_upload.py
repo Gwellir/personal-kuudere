@@ -2,8 +2,8 @@ from time import sleep
 
 import requests
 
+from .exceptions import MalformedABParamsError
 from handler_modules.base import Handler
-from handler_modules.voting_system.exceptions import MalformedABParamsError
 from orm.ORMWrapper import VotedCharacters
 
 
