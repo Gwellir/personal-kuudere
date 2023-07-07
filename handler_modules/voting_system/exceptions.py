@@ -28,3 +28,6 @@ class VotingIsFinishedError(Exception):
 
 class InvalidVotesError(Exception):
     pass
+
+class NotAChatMember(Exception):
+    pass

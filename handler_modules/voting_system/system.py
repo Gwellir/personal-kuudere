@@ -2,13 +2,18 @@ import abc
 import dataclasses
 import itertools
 import math
+import os
+import pickle
 
 from orm.ORMWrapper import VotedCharacters
 from .exceptions import DuplicateVotingItemsError, VotingIsFinishedError, InvalidVotesError
 
 from typing import TYPE_CHECKING, List, Dict
+
+from ..base import HandlerError
+
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Hashable
 
 
 class Displayable(abc.ABC):
@@ -64,18 +69,64 @@ class Position:
 
 
 class VotingSystem:
+    bot_data_param = "current_voting"
+    pickle_file = "voting.pickle"
+    max_grid_size = 32
 
     def __init__(self, name: str, items: List[Displayable]):
         self.name = name
         self.items = items
+        self.item_to_item_number = {item: i for i, item in enumerate(self.items)}
         if len(self.items) > len(set(items)):
             raise DuplicateVotingItemsError
         self.positions = [Position(item, 0, 0) for item in items]
         self.stage = 0
         self.grid_size = len(self.items)
-        self.user_votes: Dict[Any, List[bool]] = dict()
+        self.user_votes: Dict[Hashable, List[bool]] = dict()
         self.results: List[List[Position]] = []
         self.is_finished = False
+        self.store()
+
+    def get_stage_name(self):
+        if self.stage == 0:
+            return "Отборочный тур"
+        elif self.grid_size == 8:
+            return "Четвертьфинал"
+        elif self.grid_size == 4:
+            return "Полуфинал"
+        elif self.grid_size == 2:
+            return "Финал"
+        elif self.grid_size == 1:
+            return "Завершено"
+        else:
+            return f"1/{self.grid_size//2} финала"
+
+    @classmethod
+    def get_voting(cls, bot_data):
+        if not (vs := bot_data.get(cls.bot_data_param)):
+            try:
+                vs = cls._restore()
+                bot_data[cls.bot_data_param] = vs
+            except FileNotFoundError:
+                raise HandlerError(f"Не ведётся никакое текущее голосование!")
+
+        return vs
+
+    @classmethod
+    def clear(cls, bot_data):
+        os.remove(cls.pickle_file)
+        vs = bot_data.pop(cls.bot_data_param)
+        return vs
+
+    @classmethod
+    def _restore(cls) -> "VotingSystem":
+        with open(cls.pickle_file, "rb") as f:
+            vs = pickle.load(f)
+            return vs
+
+    def store(self):
+        with open(self.pickle_file, "wb") as f:
+            pickle.dump(self, f)
 
     def get_all_results(self):
         return self.results
@@ -83,23 +134,33 @@ class VotingSystem:
     def get_current_round_candidates(self):
         return [(pos.item, pos.seed_number) for pos in self.positions]
 
-    def set_user_votes(self, user: "Any", vote_list: List[bool]):
+    def get_current_available_string(self):
+        if self.stage > 0:
+            return "".join([f"{self.item_to_item_number[pos.item]:02}" for pos in self.positions])
+
+    def set_user_votes(self, user: "Hashable", vote_list: List[bool]):
         if self.is_finished:
             raise VotingIsFinishedError
-        if user in self.user_votes:
-            votes = self.user_votes.get(user)
+        votes = self.user_votes.get(user)
+        if votes:
             for i, vote in enumerate(votes):
                 if vote:
                     self.positions[i].current_votes -= 1
         if self.stage > 0:
-            self._validate_votes(vote_list)
+            self._validate_votes(vote_list, votes)
+
         for i, vote in enumerate(vote_list):
             if vote:
                 self.positions[i].current_votes += 1
         self.user_votes[user] = vote_list
+        print([f"{pos.current_votes} {pos.seed_number}" for pos in self.positions])
+        self.store()
 
-    def _validate_votes(self, vote_list):
+    def _validate_votes(self, vote_list, prev_votes):
         for i in range(self.grid_size // 2):
+            if prev_votes and prev_votes[2 * i:2 * i + 2] != [False, False]:
+                if vote_list[2*i:2*i + 2] != prev_votes[2 * i:2 * i + 2]:
+                    raise InvalidVotesError
             if vote_list[2*i] and vote_list[2*i + 1]:
                 # Cannot vote for both candidates in a pair
                 raise InvalidVotesError
@@ -108,6 +169,7 @@ class VotingSystem:
         if self.is_finished:
             raise VotingIsFinishedError
         self.results.append(self.positions.copy())
+        print([f"{pos.current_votes} {pos.seed_number}" for pos in self.positions])
         if self.stage == 0:
             self._build_seeded_grid()
         else:
@@ -121,17 +183,19 @@ class VotingSystem:
         if self.grid_size == 1:
             print(self.positions)
             self.is_finished = True
+        self.store()
 
     def _build_seeded_grid(self):
         self.positions = sorted(self.positions, key=lambda item: item.current_votes, reverse=True)
         grid_rounds = int(math.log2(len(self.positions)))
-        self.grid_size = 2 ** grid_rounds
+        self.grid_size = min(2 ** grid_rounds, self.max_grid_size)
         self.positions = self.positions[:self.grid_size]
         for seed, position in enumerate(self.positions):
             position.seed_number = seed + 1
 
         pairings = self._build_pairs(grid_rounds)
         self.positions = [self.positions[i] for i in pairings]
+        self.store()
 
     def _remove_losers(self):
         winner_list = [False for _ in self.positions]
@@ -145,9 +209,9 @@ class VotingSystem:
                 winner_list[2*i] = True
             else:
                 winner_list[2*i + 1] = True
-        print([f"{pos.current_votes} {pos.seed_number}" for pos in self.positions])
         print(winner_list)
         self.positions = list(itertools.compress(self.positions, winner_list))
+        self.store()
 
     @staticmethod
     def _build_pairs(pwr2: int):

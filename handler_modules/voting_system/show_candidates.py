@@ -29,7 +29,7 @@ class ShowCandidates(Handler):
 
     def answer(self, result):
         waifu_counter, allowed_entries = result
-        msg = f"<b>Список внесённых няш сезона ({waifu_counter})</b>:"
+        msg = f"<b>Список внесённых няш сезона ({waifu_counter})</b> #voting:"
         for anime in [*allowed_entries.keys()]:
             msg += f"\n\n<b>{anime}</b>"
             for char in allowed_entries[anime]:

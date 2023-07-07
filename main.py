@@ -11,7 +11,7 @@ from telegram.ext import (
     InlineQueryHandler,
     MessageHandler,
     Updater,
-    Dispatcher,
+    Dispatcher, PicklePersistence,
 )
 
 # tokens
@@ -24,6 +24,8 @@ from logger.logger import TELEGRAM_LOG
 if __name__ == "__main__":
 
     def get_handler_filters(handler: dict):
+        if handler.get("all_chats_allowed", False):
+            return
         filters = Filters.chat(config.dev_tg_id)
         if not handler.get("admin", False):
             filters = filters | Filters.chat_type.private
@@ -36,14 +38,19 @@ if __name__ == "__main__":
         return filters
 
     # telegram.ext initialization
-    updater: Updater = Updater(token=config.token, use_context=True)
+    updater: Updater = Updater(
+        token=config.token,
+        use_context=True,
+        # persistence=PicklePersistence("persist.pickle", store_user_data=False, store_chat_data=False, )
+    )
     dispatcher: Dispatcher = updater.dispatcher
+    bot_data = dispatcher.bot_data
     TELEGRAM_LOG.debug(f"Init updater and dispatcher for bot: {dispatcher.bot.get_me()}")
 
     core = BotCore(updater)
 
     job_queue = updater.job_queue
-    dispatcher.bot_data.update(job_queue=job_queue)
+    # dispatcher.bot_data.update(job_queue=job_queue)
     TELEGRAM_LOG.debug(f"Init job queue...")
 
     job_feeds = job_queue.run_repeating(core.jobs.update_nyaa, interval=600, first=10)
@@ -67,6 +74,7 @@ if __name__ == "__main__":
         "sticker": Filters.sticker,
         "chat": Filters.chat,
         "unknown": Filters.command,
+        "web_app_data": Filters.status_update.web_app_data,
         "all": Filters.all,
     }
 

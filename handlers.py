@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
+from handler_modules.voting_system.manage_voting import ManageVoting
+from handler_modules.voting_system.voting_web_app import VotingWebApp, Vote
+
 # from handler_modules.url_history.url_cache import URLCache
 
 if TYPE_CHECKING:
@@ -337,6 +340,21 @@ class HandlersStructure:
                     "command": [VotingUpload.command],
                     "function": VotingUpload(),
                     "admin": True,
+                },
+                {
+                    "command": [ManageVoting.command],
+                    "function": ManageVoting(),
+                    "admin": True,
+                },
+                {
+                    "command": [Vote.command],
+                    "function": Vote(),
+                    "admin": False,
+                    "private": True,
+                },
+                {
+                    "message": "web_app_data",
+                    "function": VotingWebApp(),
                 },
             ],
             [
