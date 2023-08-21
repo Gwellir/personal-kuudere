@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
-from handler_modules.voting_system.manage_voting import ManageVoting
+from handler_modules.voting_system.manage_voting import ManageVoting, ShowResults
 from handler_modules.voting_system.voting_web_app import VotingWebApp, Vote
 
 # from handler_modules.url_history.url_cache import URLCache
@@ -28,7 +28,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedMpeg4Gif,
     ParseMode,
-    Update,
+    Update, ChatMember,
 )
 from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
@@ -330,6 +330,11 @@ class HandlersStructure:
                     "function": self.process_waifus,
                     "admin": True,
                 },
+                {
+                    "command": ["get_member_info"],
+                    "function": self.get_chat_member_by_id,
+                    "admin": True,
+                },
                 {"command": [Voting.command], "function": Voting(), "admin": True},
                 {
                     "command": [Nominate.command],
@@ -351,6 +356,11 @@ class HandlersStructure:
                     "function": Vote(),
                     "admin": False,
                     "private": True,
+                },
+                {
+                    "command": [ShowResults.command],
+                    "function": ShowResults(),
+                    "admin": True,
                 },
                 {
                     "message": "web_app_data",
@@ -1126,6 +1136,21 @@ class HandlersStructure:
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
+
+    def get_chat_member_by_id(self, update: Update, context):
+        tg_id = context.args[0]
+        try:
+            member = context.bot.get_chat_member(config.main_chat, tg_id)
+        except BadRequest:
+            update.effective_message.reply_text(
+                f"Not found: {tg_id}"
+            )
+            return
+        if isinstance(member, ChatMember):
+            update.effective_message.reply_text(
+                f"Found {member.user.username} {member.user.full_name} {member.user.link}"
+            )
+            return
 
     def on_chat_join(self, update: Update, context):
         event = update.my_chat_member

@@ -2,7 +2,7 @@ import json
 import urllib.parse
 
 from telegram import Update, WebAppInfo, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, TelegramError, \
-    ChatMemberLeft
+    ChatMemberLeft, ParseMode
 from telegram.ext import ContextTypes
 
 import config
@@ -68,14 +68,14 @@ class VotingWebApp(Handler):
 
             else:
                 candidates = vs.get_current_round_candidates()
-                results = "\n".join([
-                    f"{candidate[0].get_name()} ({candidate[0].get_category()})"
+                results = "\n\n".join([
+                    f"<b>{candidate[0].get_name()}</b> (<i>{candidate[0].get_category()}</i>)"
                     for i, candidate in enumerate(candidates) if boolean_data[i]
                 ])
                 try:
                     vs.set_user_votes(update.effective_user.id, boolean_data)
-                    reply_text = f"Вы ({update.effective_user.name}#{update.effective_user.id})" \
-                                 f" проголосовали за:\n{results}"
+                    reply_text = f"<b>Вы </b>({update.effective_user.name}#{update.effective_user.id})" \
+                                 f" <b>проголосовали за:</b>\n{results}"
                 except VotingIsFinishedError:
                     reply_text = "Это голосование закончено"
                 except InvalidVotesError:
@@ -83,4 +83,5 @@ class VotingWebApp(Handler):
         update.effective_message.reply_text(
             reply_text,
             reply_markup=ReplyKeyboardRemove(),
+            parse_mode=ParseMode.HTML,
         )

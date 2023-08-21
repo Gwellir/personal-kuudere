@@ -3,7 +3,10 @@ import dataclasses
 import itertools
 import math
 import os
-import pickle
+import random
+import copy
+
+import dill as pickle
 
 from orm.ORMWrapper import VotedCharacters
 from .exceptions import DuplicateVotingItemsError, VotingIsFinishedError, InvalidVotesError
@@ -99,7 +102,7 @@ class VotingSystem:
         elif self.grid_size == 1:
             return "Завершено"
         else:
-            return f"1/{self.grid_size//2} финала"
+            return f"1/{self.grid_size // 2} финала"
 
     @classmethod
     def get_voting(cls, bot_data):
@@ -121,7 +124,7 @@ class VotingSystem:
     @classmethod
     def _restore(cls) -> "VotingSystem":
         with open(cls.pickle_file, "rb") as f:
-            vs = pickle.load(f)
+            vs = pickle.load(f, ignore=True)
             return vs
 
     def store(self):
@@ -168,11 +171,11 @@ class VotingSystem:
     def advance_stage(self):
         if self.is_finished:
             raise VotingIsFinishedError
-        self.results.append(self.positions.copy())
         print([f"{pos.current_votes} {pos.seed_number}" for pos in self.positions])
         if self.stage == 0:
-            self._build_seeded_grid()
+            self._build_seeded_bracket()
         else:
+            self.results.append(copy.deepcopy(self.positions))
             self._remove_losers()
             self.grid_size //= 2
         # set current votes for round to 0
@@ -185,17 +188,23 @@ class VotingSystem:
             self.is_finished = True
         self.store()
 
-    def _build_seeded_grid(self):
+    def _build_seeded_bracket(self):
+        random.shuffle(self.positions)
         self.positions = sorted(self.positions, key=lambda item: item.current_votes, reverse=True)
-        grid_rounds = int(math.log2(len(self.positions)))
-        self.grid_size = min(2 ** grid_rounds, self.max_grid_size)
+        self.results.append(copy.deepcopy(self.positions))
+
+        self.grid_size = self.get_bracket_size()
         self.positions = self.positions[:self.grid_size]
         for seed, position in enumerate(self.positions):
             position.seed_number = seed + 1
 
-        pairings = self._build_pairs(grid_rounds)
+        pairings = self._build_pairs(self.grid_size)
         self.positions = [self.positions[i] for i in pairings]
         self.store()
+
+    def get_bracket_size(self):
+        bracket_rounds = int(math.log2(len(self.items)))
+        return min(2 ** bracket_rounds, self.max_grid_size)
 
     def _remove_losers(self):
         winner_list = [False for _ in self.positions]
@@ -214,13 +223,12 @@ class VotingSystem:
         self.store()
 
     @staticmethod
-    def _build_pairs(pwr2: int):
+    def _build_pairs(bracket_size: int):
         nums = [0, ]
         i = 0
-        while pwr2 > 0:
+        while bracket_size > len(nums):
             i += 1
             top = 2 ** i - 1
             nums_add = [top - n for n in nums]
             nums = list(itertools.chain(*zip(nums, nums_add)))
-            pwr2 -= 1
         return nums
