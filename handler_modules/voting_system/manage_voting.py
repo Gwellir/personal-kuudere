@@ -6,7 +6,7 @@ from typing import List
 from telegram import ParseMode, Bot
 
 import config
-from handler_modules.base import Handler, HandlerError
+from handler_modules.base import Handler
 from handler_modules.voting_system.system import VotingSystem, DisplayableCharacter
 from orm.ORMWrapper import VotedCharacters, SeasonalVotings
 
@@ -95,8 +95,17 @@ def generate_json(vs):
 
     data.append([data_from_position(pos, current=True) for pos in vs.positions])
 
+    season, year = vs.name.split()
+    season_tl = {
+        "summer": "Лето",
+        "fall": "Осень",
+        "winter": "Зима",
+        "spring": "Весна",
+    }
+    season = season_tl[season.lower()]
+
     bracket = {
-        "title": "Весна 2023",
+        "title": "{0} {1}".format(season, year),
         "stage": vs.stage,
         "bracket_size": vs.get_bracket_size(),
         "data": data,
