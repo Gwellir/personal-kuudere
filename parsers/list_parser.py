@@ -19,6 +19,7 @@ from utils.anime_synonyms import Synonyms
 from utils.db_wrapper2 import BaseRelations, DataInterface
 from utils.exporter import ListExtractor
 from utils.jikan_custom import JikanCustom
+from utils.seasons import AnimeSeason
 
 PAGE_SIZE = 300
 AL_URL = "https://graphql.anilist.co"
@@ -396,7 +397,12 @@ class ListImporter:
             cross_data = [
                 {
                     "mal_aid": anime["mal_id"],
-                    "season": season_name,
+                    "season": str(max(
+                        AnimeSeason(*season_name.split()),
+                        AnimeSeason(anime["season"], anime["year"])
+                        if anime["season"] and anime["year"]
+                        else AnimeSeason(*season_name.split()),
+                    )),
                 }
                 for anime in anime_list
             ]

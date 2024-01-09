@@ -437,7 +437,8 @@ class DataInterface:
         result = (
             session.query(Ongoings)
             .join(Anime, Anime.mal_aid == Ongoings.mal_aid)
-            .filter(Anime.title.like(f"%{title}%"))
+            .join(AnimeXSynonyms, AnimeXSynonyms.mal_aid == Ongoings.mal_aid)
+            .filter(AnimeXSynonyms.synonym.like(f"%{title}%"))
             .filter(Anime.show_type.in_(TYPE_LIST))
             .filter(Anime.status != "Finished Airing")
             .with_entities(Ongoings.mal_aid, Anime.title)
