@@ -1,4 +1,5 @@
 import abc
+import logging
 from typing import TYPE_CHECKING
 
 from telegram import ParseMode
@@ -7,6 +8,9 @@ from orm.ORMWrapper import BaseRelations
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
+
+
+logger = logging.getLogger("base_handler")
 
 
 class HandlerError(Exception):
@@ -35,9 +39,13 @@ class Handler:
         self._run(context.args)
 
     def _run(self, args):
+        logger.info(f"started handler for: {self.command}")
         try:
+            logger.info(f"received args: {args}")
             params = self.parse(args)
+            logger.info(f"parsed params: {params}")
             result = self.process(params)
+            logger.info(f"final result: {result}")
             self.answer(result)
         except HandlerError as err:
             self.bot.send_message(
