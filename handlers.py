@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
+from handler_modules.image_extractor.extract_images import TwitterExtractor
 from handler_modules.voting_system.manage_voting import ManageVoting, ShowResults
 from handler_modules.voting_system.voting_web_app import VotingWebApp, Vote
 
@@ -63,6 +64,7 @@ class HandlersList(
             "private",
             # 'admin_delim',
             "admin",
+            "special_media",
             "chat_join",
             "inline",
             "callbacks",
@@ -267,11 +269,6 @@ class HandlersStructure:
                 {"command": ["users"], "function": self.users_stats},
                 {"command": [ShowCandidates.command], "function": ShowCandidates()},
                 # {'command': ['source'], 'function': self.ask_saucenao},
-                {
-                    "message": "sticker",
-                    "function": self.convert_webp,
-                    "chats": [config.gacha_chat],
-                },
                 # {
                 #     "command": ["admins"],
                 #     "function": self.ping_admins,
@@ -303,7 +300,6 @@ class HandlersStructure:
                     "function": self.toggle_torrents,
                     "private": True,
                 },
-                {"message": "photo", "function": self.ask_saucenao, "private": True},
                 {
                     "command": ["torrents", "ongoings"],
                     "function": self.torrents_stats,
@@ -365,6 +361,19 @@ class HandlersStructure:
                 {
                     "message": "web_app_data",
                     "function": VotingWebApp(),
+                },
+            ],
+            [  # special media
+                {
+                    "message": "sticker",
+                    "function": self.convert_webp,
+                    "chats": [config.gacha_chat],
+                },
+                {"message": "photo", "function": self.ask_saucenao, "private": True},
+                {
+                    "message": "url",
+                    "function": TwitterExtractor(),
+                    "chats": [config.gacha_chat],
                 },
             ],
             [

@@ -74,6 +74,7 @@ if __name__ == "__main__":
         "gif": Filters.document.gif,
         "sticker": Filters.sticker,
         "chat": Filters.chat,
+        "url": Filters.entity(MessageEntity.URL),
         "unknown": Filters.command,
         "web_app_data": Filters.status_update.web_app_data,
         "all": Filters.all,
