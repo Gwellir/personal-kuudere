@@ -1,8 +1,43 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from enum import Enum
+from typing import TYPE_CHECKING, Union
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from orm.ORMWrapper import Anime
+
+
+class SeasonEnum(int, Enum):
+    winter = 1
+    spring = 2
+    summer = 3
+    fall = 4
+
+    @classmethod
+    def get_by_name(cls, name):
+        return cls.__getitem__(name)
+
+
+class AnimeSeason(BaseModel):
+    season: SeasonEnum
+    year: int
+
+    def __init__(self, season_name: str, year: Union[str, int]):
+        super().__init__(season=SeasonEnum[season_name.lower()], year=int(year))
+
+    def __str__(self):
+        return f"{self.season.name.capitalize()} {self.year}"
+
+    def __eq__(self, other):
+        return self.year == other.year and self.season == other.season
+
+    def __lt__(self, other):
+        if self.year == other.year:
+            return self.season < other.season
+        else:
+            return self.year < other.year
+
 
 MONTH_TO_SEASON = {
     0: "fall",
