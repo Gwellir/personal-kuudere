@@ -21,6 +21,13 @@ MAL_API_LIST_PAGE_SIZE = int(os.getenv("MAL_API_LIST_PAGE_SIZE"))
 
 season_stats_file = os.getenv("SEASON_STATS_FILE")
 
+proxy_address = os.getenv("PROXY_ADDRESS")
+proxy_username = os.getenv("PROXY_USERNAME")
+proxy_password = os.getenv("PROXY_PASSWORD")
+proxy_schema = os.getenv("PROXY_SCHEMA")
+proxy_auth_url = f"{proxy_schema}://{proxy_username}:{proxy_password}@{proxy_address}"
+proxy_url = f"{proxy_schema}://{proxy_address}"
+
 
 class DB:
     host = os.getenv("DB_HOST")
