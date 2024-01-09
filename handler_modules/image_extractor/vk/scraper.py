@@ -24,23 +24,17 @@ class VkScraper(BaseScraper):
                 media = []
                 for item in media_data:
                     if item["type"] == "photo":
+                        url = sorted(item["photo"]["sizes"], key=lambda x: x["width"])[-1]["url"]
                         media.append(
                             PostMedia.model_validate(
                                 dict(
-                                    url=item["photo"]["sizes"][-4]["url"],
+                                    url=url,
                                     type=MediaType.IMAGE,
                                 )
                             )
                         )
                     elif item["type"] == "video":
-                        media.append(
-                            PostMedia.model_validate(
-                                dict(
-                                    url=item["video"]["player"],
-                                    type=MediaType.VIDEO,
-                                )
-                            )
-                        )
+                        pass
                 converted_data["attached_media"] = media
 
             converted_data["url"] = url
