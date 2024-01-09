@@ -13,6 +13,7 @@ from telegram.ext import (
     Updater,
     Dispatcher, PicklePersistence,
 )
+from telegram import MessageEntity
 
 # tokens
 import config
@@ -113,6 +114,21 @@ if __name__ == "__main__":
 
     updater.bot.send_message(chat_id=config.dev_tg_id, text="Waking up...")
 
-    updater.start_polling()
+    updater.start_polling(allowed_updates=[
+        "callback_query",
+        "chat_join_request",
+        "chat_member",
+        "channel_post",
+        "inline_query",
+        "chosen_inline_result",
+        "edited_channel_post",
+        "edited_message",
+        "message",
+        "poll",
+        "pre_checkout_query",
+        "shipping_query",
+        "poll_answer",
+        "my_chat_member",
+    ])
     TELEGRAM_LOG.info("Bot started.")
     updater.idle()

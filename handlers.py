@@ -1153,7 +1153,7 @@ class HandlersStructure:
             return
 
     def on_chat_join(self, update: Update, context):
-        event = update.my_chat_member
+        event = update.my_chat_member if update.my_chat_member else update.chat_member
         context.bot.send_message(
             chat_id=config.dev_tg_id,
             text=f"status change: {event.old_chat_member.status} -> {event.new_chat_member.status}\n"
