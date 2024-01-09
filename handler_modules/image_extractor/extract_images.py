@@ -170,10 +170,11 @@ class TwitterExtractor(Handler):
                     original=self.message.link,
                     author=self.user.full_name,
                     **item.model_dump(),
-                )
+                )[:1020]
             )
             # drop the t.co link to the tweet itself
-            caption = " ".join(caption.split(" ")[:-1])
+            if item.url.startswith("https://twitter.com/"):
+                caption = " ".join(caption.split(" ")[:-1])
             media_group = self._form_media_group(item, caption)
             self.chat.send_media_group(
                 media=media_group,
