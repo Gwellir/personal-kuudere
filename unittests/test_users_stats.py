@@ -4,7 +4,7 @@ from handler_modules.users_stats import UsersStats
 from orm.ORMWrapper import BaseRelations
 
 br = BaseRelations()
-us = UsersStats(br)
+us = UsersStats()
 
 
 class TestUsersStats(TestCase):

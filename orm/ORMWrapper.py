@@ -278,6 +278,7 @@ class ListStatus(Base):
     eps = Column(INTEGER(10))
     score = Column(INTEGER(10), index=True)
     airing = Column(TINYINT(3))
+    list_updated_at = Column(DateTime(), nullable=True)
 
     users = relationship("Users")
 

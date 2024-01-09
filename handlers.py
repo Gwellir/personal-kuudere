@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
+from handler_modules.voting_system.manage_voting import ManageVoting, ShowResults
+from handler_modules.voting_system.voting_web_app import VotingWebApp, Vote
+
 # from handler_modules.url_history.url_cache import URLCache
 
 if TYPE_CHECKING:
@@ -25,14 +28,17 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedMpeg4Gif,
     ParseMode,
-    Update,
+    Update, ChatMember,
 )
 from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
 
 import config
-from handler_modules.random import AnimeFilter, AnimeSelector
-from handler_modules.voting import Nominate, ShowCandidates, Voting, VotingUpload
+from handler_modules.random_anime import AnimeFilter, AnimeSelector
+from handler_modules.voting_system.voting import Voting
+from handler_modules.voting_system.show_candidates import ShowCandidates
+from handler_modules.voting_system.voting_upload import VotingUpload
+from handler_modules.voting_system.nominate import Nominate
 from utils.expiring_set import ExpiringSet
 
 # todo inline keyboard builder shouldn't be here
@@ -174,6 +180,8 @@ class UtilityFunctions:
                 next_id = int(self.relations[chain[0]]["Sequel"][0]["mal_id"])
                 chain.append(next_id)
             except KeyError as e:
+                if type(e.args[0]) == int:
+                    self.al.get_anime_by_aid(e.args[0])
                 print("ERROR:", e.args)
             i = 1
             try:
@@ -322,6 +330,11 @@ class HandlersStructure:
                     "function": self.process_waifus,
                     "admin": True,
                 },
+                {
+                    "command": ["get_member_info"],
+                    "function": self.get_chat_member_by_id,
+                    "admin": True,
+                },
                 {"command": [Voting.command], "function": Voting(), "admin": True},
                 {
                     "command": [Nominate.command],
@@ -332,6 +345,26 @@ class HandlersStructure:
                     "command": [VotingUpload.command],
                     "function": VotingUpload(),
                     "admin": True,
+                },
+                {
+                    "command": [ManageVoting.command],
+                    "function": ManageVoting(),
+                    "admin": True,
+                },
+                {
+                    "command": [Vote.command],
+                    "function": Vote(),
+                    "admin": False,
+                    "private": True,
+                },
+                {
+                    "command": [ShowResults.command],
+                    "function": ShowResults(),
+                    "admin": True,
+                },
+                {
+                    "message": "web_app_data",
+                    "function": VotingWebApp(),
                 },
             ],
             [
@@ -1103,6 +1136,21 @@ class HandlersStructure:
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
+
+    def get_chat_member_by_id(self, update: Update, context):
+        tg_id = context.args[0]
+        try:
+            member = context.bot.get_chat_member(config.main_chat, tg_id)
+        except BadRequest:
+            update.effective_message.reply_text(
+                f"Not found: {tg_id}"
+            )
+            return
+        if isinstance(member, ChatMember):
+            update.effective_message.reply_text(
+                f"Found {member.user.username} {member.user.full_name} {member.user.link}"
+            )
+            return
 
     def on_chat_join(self, update: Update, context):
         event = update.my_chat_member
