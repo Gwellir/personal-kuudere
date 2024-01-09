@@ -1,12 +1,32 @@
 from functools import lru_cache
+from http import HTTPStatus
 from pprint import pprint
 from typing import Optional
 
+import requests
 from playwright.sync_api import sync_playwright
 from nested_lookup import nested_lookup
 
 import config
 from handler_modules.twitter_images.parser import parse_tweet
+
+
+@lru_cache()
+def vx_scrape_tweet(url: str) -> Optional[dict]:
+    """Scrape a twitter page using vxtwitter API"""
+
+    api_url = url.replace("twitter.com", "api.vxtwitter.com")
+    res = requests.get(
+        api_url,
+        proxies={
+            "https": config.proxy_auth_url,
+            "http": config.proxy_auth_url,
+        },
+    )
+    if res.status_code == HTTPStatus.OK:
+        return res.json()
+    else:
+        return
 
 
 @lru_cache()

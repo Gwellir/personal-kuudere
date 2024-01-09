@@ -5,12 +5,12 @@ from typing import List
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-from telegram import InputMediaPhoto, ParseMode
+from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
 
 import config
 from handler_modules.base import Handler
 from handler_modules.twitter_images.parser import parse_tweet
-from handler_modules.twitter_images.scraper import scrape_tweet
+from handler_modules.twitter_images.scraper import vx_scrape_tweet
 
 logger = logging.getLogger("handler.extract_images")
 
@@ -76,19 +76,21 @@ class TwitterExtractor(Handler):
     def _get_tweet_data(self, raw_data: dict, url: str):
         tweet_data = parse_tweet(raw_data)
         if tweet_data["attached_media"]:
-            images = [
-                media["media_url_https"]
+            # the only video in a tweet works finely on mobile
+            if tweet_data["attached_media"][0]["type"] == "video" and len(tweet_data) == 1:
+                return None
+            media_list = [
+                (media["url"], media["type"])
                 for media in tweet_data["attached_media"]
-                if media["type"] == "photo"
+                if media["type"] in ("image", "video")
             ]
-            if images:
+            if media_list:
                 return {
                     "url": url,
                     "id": tweet_data.get("id"),
-                    "images": images,
+                    "media": media_list,
                     "name": tweet_data.get("name"),
                     "screen_name": tweet_data.get("screen_name"),
-                    "language": tweet_data.get("language"),
                     "text": tweet_data.get("text"),
                 }
 
@@ -130,29 +132,40 @@ class TwitterExtractor(Handler):
             }
 
     def process(self, params: list):
-        posts_with_images = []
+        posts_with_media = []
         for num, url in enumerate(params):
-            raw_tweet = scrape_tweet(url)
-            has_img = False
+            raw_tweet = vx_scrape_tweet(url)
+            has_media = False
             if raw_tweet:
                 parsed_tweet = self._get_tweet_data(raw_tweet, url)
                 if parsed_tweet:
-                    posts_with_images.append(parsed_tweet)
-                    has_img = True
-            else:
-                semi_parsed_tweet = self._get_fx_data(url)
-                if semi_parsed_tweet:
-                    posts_with_images.append(semi_parsed_tweet)
-                    has_img = True
-            if not has_img:
+                    posts_with_media.append(parsed_tweet)
+                    has_media = True
+            if not has_media:
                 self.hidden.pop(num)
 
-        return posts_with_images
+        return posts_with_media
+
+    @staticmethod
+    def _form_media_group(item, caption):
+        media_group = []
+        for i, media in enumerate(item["media"]):
+            wrapper = InputMediaPhoto if media[1] == "image" else InputMediaVideo
+            media_group.append(
+                wrapper(
+                    media[0],
+                    parse_mode=ParseMode.HTML,
+                    # only add the caption to image #0
+                    caption=caption if not i else None,
+                )
+            )
+
+        return media_group
 
     def answer(self, result):
         for num, item in enumerate(result):
             caption = (
-                'Фото из <a href="{url}">твита</a> {screen_name} ({name})\n'
+                'Медиа из <a href="{url}">твита</a> {screen_name} ({name})\n'
                 '<a href="{original}">&gt; сообщение от {author} &lt;</a> \n\n'
                 '{text}'.format(
                     original=self.message.link,
@@ -162,15 +175,7 @@ class TwitterExtractor(Handler):
             )
             # drop the t.co link to the tweet itself
             caption = " ".join(caption.split(" ")[:-1])
-            media_group = [
-                InputMediaPhoto(
-                    image,
-                    parse_mode=ParseMode.HTML,
-                    # only add the caption to image #0
-                    caption=caption if not i else None,
-                )
-                for i, image in enumerate(item["images"])
-            ]
+            media_group = self._form_media_group(item, caption)
             self.chat.send_media_group(
                 media=media_group,
                 disable_notification=True,
