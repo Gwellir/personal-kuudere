@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest
 
-from handler_modules.twitter_images.extract_images import TwitterExtractor
+from handler_modules.image_extractor.extract_images import TwitterExtractor
 from handler_modules.voting_system.manage_voting import ManageVoting, ShowResults
 from handler_modules.voting_system.voting_web_app import VotingWebApp, Vote
 

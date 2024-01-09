@@ -14,6 +14,7 @@ Pillow==10.1.0
 pydantic==2.5.1
 python-dotenv==1.0.0
 python-telegram-bot<14
+requests==2.31.0
 saucenao-api==2.4.0
 torrentool==1.2.0
 

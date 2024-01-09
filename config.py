@@ -29,6 +29,9 @@ proxy_auth_url = f"{proxy_schema}://{proxy_username}:{proxy_password}@{proxy_add
 proxy_url = f"{proxy_schema}://{proxy_address}"
 
 
+vk_token = os.getenv("VK_TOKEN")
+
+
 class DB:
     host = os.getenv("DB_HOST")
     port = os.getenv("DB_PORT")
