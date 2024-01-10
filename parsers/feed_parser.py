@@ -3,12 +3,14 @@
 import re
 import sys
 from datetime import datetime, timedelta
+from http import HTTPStatus
 from typing import Optional
 
-import feedparser
 import requests
+import rss_parser
 from Levenshtein import distance
 from pytz import timezone
+from rss_parser.models.rss import RSS
 
 import config
 from logger.logger import FEEDPARSER_LOG
@@ -152,7 +154,7 @@ def parse_feed_title(a_title: str):
 
 
 def get_local_time(dtime):
-    dt_utc = datetime(*dtime[0:6])
+    dt_utc = datetime.strptime(dtime, "%a, %d %b %Y %H:%M:%S %z")
     return dt_utc.astimezone(timezone("Europe/Moscow"))
 
 
@@ -219,39 +221,46 @@ class TorrentFeedParser:
 
         :return:
         """
-        parsed_feed = feedparser.parse(rss_feed)
+        rss_ans = requests.get(rss_feed, proxies={"https": config.proxy_auth_url})
+        if not rss_ans.status_code == HTTPStatus.OK:
+            FEEDPARSER_LOG.error(f"Failed to get feed '{rss_feed}': {rss_ans.status_code}")
+            return
+
+        parsed_feed: RSS = rss_parser.Parser.parse(rss_ans.text)
+
         last_db_entry = self.get_last_entry()
         d_3h = timedelta(hours=3)  # timezone hacks
         last_time = (last_db_entry[0] - d_3h).astimezone(timezone("Europe/Moscow"))
         last_title = last_db_entry[1]
+
         if not last_db_entry:
-            entries = [entry for entry in parsed_feed["entries"]]
+            entries = parsed_feed.channel.items
         else:
             entries = [
                 entry
-                for entry in parsed_feed["entries"]
-                if get_local_time(entry.published_parsed) > last_time
+                for entry in parsed_feed.channel.items
+                if get_local_time(entry.pub_date.content) > last_time
                 or (
-                    get_local_time(entry.published_parsed) == last_time
-                    and entry["title"] != last_title
+                    get_local_time(entry.pub_date.content) == last_time
+                    and entry.title.content != last_title
                 )
             ]
         entries.reverse()
-        FEEDPARSER_LOG.info(f"Pulled {len(entries)}/{len(parsed_feed['entries'])} new entries from '{rss_feed}'")
+        FEEDPARSER_LOG.info(f"Pulled {len(entries)}/{len(parsed_feed.channel.items)} new entries from '{rss_feed}'")
         for article in entries:
             # todo suboptimal - calculating these twice
-            dt = article.published_parsed
+            dt = article.pub_date.content
             dt_local = get_local_time(dt)
-            dt_repr = str(dt_local + d_3h)[:19]
+            dt_repr = str(dt_local)[:19]
             self.add_to_db(
-                article["title"],
+                article.title.content,
                 dt_repr,
-                article["link"],
-                article["description"],
+                article.link.content,
+                article.description.content,
                 session,
             )
             FEEDPARSER_LOG.info(
-                f"Entry - {article.title} >> {article.link} >> {article.description} >> {article.published}"
+                f"Entry - {article.title.content} >> {article.link.content} >> {article.description.content} >> {article.pub_date.content}"
             )
 
     def check_feeds(self):
@@ -397,8 +406,7 @@ class TorrentFeedParser:
             return
         is_downloaded = False
         title = re.sub(r"[|/\\?:<>]", " ", title)
-        url = link
-        r = requests.get(url)
+        r = requests.get(link, proxies={"https": config.proxy_auth_url})
         filename = (
             f"torrents/[{group}] {title}({mal_id}) - {episode:0>2}"
             + (f" [{res}p]" if res else "")
