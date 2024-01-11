@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class MediaType(Enum):
     IMAGE = "image"
     VIDEO = "video"
+    GIF = "gif"
 
 
 class PostMedia(BaseModel):
