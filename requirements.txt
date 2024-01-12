@@ -17,6 +17,7 @@ python-telegram-bot<14
 requests==2.31.0
 rss-parser==1.2.1
 saucenao-api==2.4.0
+strip-tags==0.5.1
 torrentool==1.2.0
 
 jmespath==1.0.1
