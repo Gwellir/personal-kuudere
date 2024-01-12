@@ -163,6 +163,8 @@ class TwitterExtractor(Handler):
 
     def answer(self, result: list[PostData]):
         for num, item in enumerate(result):
+            if not item.attached_media:
+                continue
             caption = (
                 'Медиа из <a href="{url}">поста</a> {name}\n'
                 '<a href="{original}">&gt; сообщение от {author} &lt;</a> \n\n'

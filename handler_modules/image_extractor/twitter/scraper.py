@@ -23,6 +23,7 @@ class TwitterScraper(BaseScraper):
                     return None
                 elif converted_data["attached_media"][0]["type"] == "gif":
                     converted_data["attached_media"][0]["type"] = "video"
+
             return PostData.model_validate(converted_data)
 
     @staticmethod
