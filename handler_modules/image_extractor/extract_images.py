@@ -5,6 +5,7 @@ from typing import List
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+from strip_tags import strip_tags
 from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
 
 import config
@@ -163,18 +164,29 @@ class TwitterExtractor(Handler):
 
     def answer(self, result: list[PostData]):
         for num, item in enumerate(result):
-            caption = (
+            if not item.attached_media:
+                continue
+            prefix = (
                 'Медиа из <a href="{url}">поста</a> {name}\n'
-                '<a href="{original}">&gt; сообщение от {author} &lt;</a> \n\n'
-                '{text}'.format(
+                '<a href="{original}">&gt; сообщение от {author} &lt;</a>'.format(
                     original=self.message.link,
                     author=self.user.full_name,
                     **item.model_dump(),
-                )[:1020]
+                )
             )
+
             # drop the t.co link to the tweet itself
             if item.url.startswith("https://twitter.com/"):
-                caption = " ".join(caption.split(" ")[:-1])
+                item.text = " ".join(item.text.split(" ")[:-1])
+            # or shorten the text from vk if it's too long
+            elif len(strip_tags(item.text)) >= (remainder_len := 1024 - len(strip_tags(prefix))):
+                item.text = strip_tags(item.text)[:remainder_len - 8] + " &lt;...&gt;"
+
+            caption = '{prefix}\n\n{text}'.format(
+                prefix=prefix,
+                text=item.text,
+            )
+
             media_group = self._form_media_group(item, caption)
             self.chat.send_media_group(
                 media=media_group,
