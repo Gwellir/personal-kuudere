@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from http import HTTPStatus
 from typing import Optional
@@ -13,6 +14,7 @@ from handler_modules.image_extractor.models import PostData
 class TwitterScraper(BaseScraper):
 
     def scrape(self, url: str) -> PostData | None:
+        url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
         if post_data:
             converted_data = self._convert(post_data)
@@ -25,6 +27,11 @@ class TwitterScraper(BaseScraper):
                     converted_data["attached_media"][0]["type"] = "video"
 
             return PostData.model_validate(converted_data)
+
+    def _clean_url(self, url: str) -> str:
+        if match := re.search(r"(https://twitter.com/\w+/status/\d+).*", url):
+            url = match.group(1)
+        return url
 
     @staticmethod
     def _convert(post_data):
