@@ -51,6 +51,7 @@ class TwitterExtractor(Handler):
         'x.com': "twitter.com",
         'vk.com': "vk.com",
         'vk.ru': "vk.com",
+        'm.vk.com': "vk.com",
     }
 
     def __init__(self):
