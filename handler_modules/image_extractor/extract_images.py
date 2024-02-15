@@ -7,6 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 import requests
 from strip_tags import strip_tags
 from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
+from telegram.error import BadRequest
 
 import config
 from handler_modules.base import Handler
@@ -189,8 +190,16 @@ class TwitterExtractor(Handler):
             )
 
             media_group = self._form_media_group(item, caption)
-            self.chat.send_media_group(
-                media=media_group,
-                disable_notification=True,
-                api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
-            )
+            try:
+                self.chat.send_media_group(
+                    media=media_group,
+                    disable_notification=True,
+                    api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
+                )
+            except BadRequest as br:
+                if br.message == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"':
+                    self.chat.send_message(
+                        f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
+                        parse_mode=ParseMode.HTML,
+                        disable_notification=True,
+                    )
