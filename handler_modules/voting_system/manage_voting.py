@@ -86,7 +86,7 @@ def generate_json(vs):
             },
         }
 
-    filename = "C:\\Users\\Valion\\YandexDisk\\kuudere\\voting_stats.json"
+    filename = config.voting_stats_file
 
     data = [
         [data_from_position(pos) for pos in stage_positions]
