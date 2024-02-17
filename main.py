@@ -1,5 +1,4 @@
 # additional utilities
-import logging
 from datetime import datetime
 
 # telegram bot
@@ -11,7 +10,7 @@ from telegram.ext import (
     InlineQueryHandler,
     MessageHandler,
     Updater,
-    Dispatcher, PicklePersistence,
+    Dispatcher,
 )
 from telegram import MessageEntity
 
@@ -46,13 +45,15 @@ if __name__ == "__main__":
     )
     dispatcher: Dispatcher = updater.dispatcher
     bot_data = dispatcher.bot_data
-    TELEGRAM_LOG.debug(f"Init updater and dispatcher for bot: {dispatcher.bot.get_me()}")
+    TELEGRAM_LOG.debug(
+        f"Init updater and dispatcher for bot: {dispatcher.bot.get_me()}"
+    )
 
     core = BotCore(updater)
 
     job_queue = updater.job_queue
     # dispatcher.bot_data.update(job_queue=job_queue)
-    TELEGRAM_LOG.debug(f"Init job queue...")
+    TELEGRAM_LOG.debug("Init job queue...")
 
     job_feeds = job_queue.run_repeating(core.jobs.update_nyaa, interval=600, first=10)
     core.jobs.update_continuations(None)
@@ -111,25 +112,27 @@ if __name__ == "__main__":
             elif "error" in handler.keys():
                 dispatcher.add_error_handler(handler["function"])
 
-    TELEGRAM_LOG.debug(f"Init handlers...")
+    TELEGRAM_LOG.debug("Init handlers...")
 
     updater.bot.send_message(chat_id=config.dev_tg_id, text="Waking up...")
 
-    updater.start_polling(allowed_updates=[
-        "callback_query",
-        "chat_join_request",
-        "chat_member",
-        "channel_post",
-        "inline_query",
-        "chosen_inline_result",
-        "edited_channel_post",
-        "edited_message",
-        "message",
-        "poll",
-        "pre_checkout_query",
-        "shipping_query",
-        "poll_answer",
-        "my_chat_member",
-    ])
+    updater.start_polling(
+        allowed_updates=[
+            "callback_query",
+            "chat_join_request",
+            "chat_member",
+            "channel_post",
+            "inline_query",
+            "chosen_inline_result",
+            "edited_channel_post",
+            "edited_message",
+            "message",
+            "poll",
+            "pre_checkout_query",
+            "shipping_query",
+            "poll_answer",
+            "my_chat_member",
+        ]
+    )
     TELEGRAM_LOG.info("Bot started.")
     updater.idle()

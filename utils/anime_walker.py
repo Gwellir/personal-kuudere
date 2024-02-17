@@ -1,10 +1,10 @@
 from random import randint, shuffle
+from time import sleep
 
-from jikanpy import APIException
-
-from orm.ORMWrapper import *
+from orm.ORMWrapper import BaseRelations, Anime
 from utils.anime_lookup import AnimeLookup
 from utils.db_wrapper2 import DataInterface
+from utils.jikan_custom import JikanCustom
 
 base = BaseRelations()
 ji = JikanCustom()

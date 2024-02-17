@@ -20,6 +20,7 @@ MAL_API_TOKEN = os.getenv("MAL_API_TOKEN")
 MAL_API_LIST_PAGE_SIZE = int(os.getenv("MAL_API_LIST_PAGE_SIZE"))
 
 season_stats_file = os.getenv("SEASON_STATS_FILE")
+voting_stats_file = os.getenv("VOTING_STATS_FILE")
 
 proxy_address = os.getenv("PROXY_ADDRESS")
 proxy_username = os.getenv("PROXY_USERNAME")

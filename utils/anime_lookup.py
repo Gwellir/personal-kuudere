@@ -41,7 +41,8 @@ class AnimeLookup:
     # todo add streamlined search in cached base
     def lookup_anime_info_by_title(self, a_title: str, ongoing=False):
         """Searches the DB for titles matching query,
-        order: exact match > substring > split words in the same order > MAL api search"""
+        order: exact match > substring > split words in the same order > MAL api search
+        """
 
         mal_info = self._di.select_anime_info_by_exact_synonym(a_title)
         if not mal_info:
@@ -102,7 +103,12 @@ class AnimeLookup:
 
     def _filter_ongoing(self, results: list) -> list:
         ong_types = ["TV", "ONA", "OVA"]
-        ratings = ["G - All Ages", "PG-13 - Teens 13 or older", "R - 17+ (violence & profanity)", "R+ - Mild Nudity"]
+        ratings = [
+            "G - All Ages",
+            "PG-13 - Teens 13 or older",
+            "R - 17+ (violence & profanity)",
+            "R+ - Mild Nudity",
+        ]
         filtered = [
             res
             for res in results

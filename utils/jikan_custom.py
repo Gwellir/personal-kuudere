@@ -41,9 +41,7 @@ def retried(func):
                     raise e
                 err_count += 1
                 wait_s = config.JIKAN_DELAY * err_count
-                print(
-                    f"API inaccessible x{err_count}: waiting for {wait_s} seconds..."
-                )
+                print(f"API inaccessible x{err_count}: waiting for {wait_s} seconds...")
                 sleep(wait_s)
                 continue
 
@@ -81,7 +79,6 @@ class JikanCustom:
         return relations
 
     def _rename_anime_fields(self):
-
         diffs = {
             "mal_id": "mal_aid",
             "type": "show_type",
@@ -203,7 +200,6 @@ class JikanCustom:
         return data
 
     def season_later(self, page: Optional[int] = None, *args, **kwargs):
-
         return self.season(page=page, upcoming=True, *args, **kwargs)
 
     @retried
@@ -211,7 +207,6 @@ class JikanCustom:
         return self._jikan.user(*args, **kwargs).get("data")
 
     def _get_normalized_animelist(self, results):
-
         airing_dict = {
             "finished_airing": 2,
             "currently_airing": 1,
@@ -264,13 +259,15 @@ class JikanCustom:
                 params = dict(
                     limit=page_size,
                     offset=offset,
-                    fields=','.join(fields),
+                    fields=",".join(fields),
                     nsfw=1,
                 )
                 results = get_userlist_part()
                 data.extend(self._get_normalized_animelist(results.get("data")))
             else:
-                raise NotImplementedError(f"Userlist processing for request '{request}' is not implemented!")
+                raise NotImplementedError(
+                    f"Userlist processing for request '{request}' is not implemented!"
+                )
 
             if results.get("paging").get("next"):
                 offset += page_size

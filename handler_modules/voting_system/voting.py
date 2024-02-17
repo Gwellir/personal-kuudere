@@ -60,9 +60,7 @@ class Voting(Handler):
             season_str = " ".join(params).strip().lower()
             if self._is_season(season_str):
                 try:
-                    voting = self._make_voting(season_str)
+                    self._make_voting(season_str)
                 except VotingCompletedError:
                     return f'Голосование за сезон "{season_str}" уже существует!'
                 return f'Начато голосование за сезон "{season_str}"'
-
-

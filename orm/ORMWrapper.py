@@ -67,7 +67,21 @@ class Anime(Base):
     title_japanese = Column(String(255))
     synopsis = Column(Text)
     show_type = Column(
-        ENUM("TV", "Movie", "OVA", "Special", "ONA", "Music", "Other", "Unknown")
+        ENUM(
+            "TV",
+            "Movie",
+            "OVA",
+            "Special",
+            "ONA",
+            "Music",
+            "Other",
+            "Unknown",
+            "TV_Short",
+            "CM",
+            "PV",
+            "TV_Special",
+            "TV Special",
+        )
     )
     started_at = Column(DateTime)
     ended_at = Column(DateTime)
@@ -101,13 +115,13 @@ class Anime(Base):
 
     def __repr__(self):
         return (
-            f"<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
-            f"<b>Type</b>: %s\n"
-            f"<b>Status</b>: %s\n"
-            f"<b>Episodes</b>: %s\n"
-            f"<b>Aired</b>: %s to %s\n"
-            f"<b>Score</b>: %s\n\n"
-            f"%s"
+            "<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
+            "<b>Type</b>: %s\n"
+            "<b>Status</b>: %s\n"
+            "<b>Episodes</b>: %s\n"
+            "<b>Aired</b>: %s to %s\n"
+            "<b>Score</b>: %s\n\n"
+            "%s"
             % (
                 self.image_url,
                 self.mal_aid,
@@ -149,7 +163,9 @@ class Characters(Base):
         char = session.query(Characters).filter_by(mal_cid=cid).first()
         if not char:
             remote_char = jikan.character(cid, "full")
-            anime_ids = [entry.get("anime").get("mal_id") for entry in remote_char["anime"]]
+            anime_ids = [
+                entry.get("anime").get("mal_id") for entry in remote_char["anime"]
+            ]
             related_anime = (
                 session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()
             )
@@ -271,14 +287,28 @@ class ListStatus(Base):
     mal_aid = Column(BIGINT(20), primary_key=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     show_type = Column(
-        ENUM("TV", "Movie", "OVA", "Special", "ONA", "Music", "Other", "Unknown")
+        ENUM(
+            "TV",
+            "Movie",
+            "OVA",
+            "Special",
+            "ONA",
+            "Music",
+            "Other",
+            "Unknown",
+            "TV_Short",
+            "CM",
+            "PV",
+            "TV_Special",
+            "TV Special",
+        )
     )
     status = Column(TINYINT(3), nullable=False)
     watched = Column(INTEGER(10))
     eps = Column(INTEGER(10))
     score = Column(INTEGER(10), index=True)
     airing = Column(TINYINT(3))
-    list_updated_at = Column(DateTime(), nullable=True)
+    # list_updated_at = Column(DateTime(), nullable=True)
 
     users = relationship("Users")
 
