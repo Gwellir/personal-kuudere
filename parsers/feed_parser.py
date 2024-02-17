@@ -223,7 +223,9 @@ class TorrentFeedParser:
         """
         rss_ans = requests.get(rss_feed, proxies={"https": config.proxy_auth_url})
         if not rss_ans.status_code == HTTPStatus.OK:
-            FEEDPARSER_LOG.error(f"Failed to get feed '{rss_feed}': {rss_ans.status_code}")
+            FEEDPARSER_LOG.error(
+                f"Failed to get feed '{rss_feed}': {rss_ans.status_code}"
+            )
             return
 
         parsed_feed: RSS = rss_parser.Parser.parse(rss_ans.text)
@@ -246,7 +248,9 @@ class TorrentFeedParser:
                 )
             ]
         entries.reverse()
-        FEEDPARSER_LOG.info(f"Pulled {len(entries)}/{len(parsed_feed.channel.items)} new entries from '{rss_feed}'")
+        FEEDPARSER_LOG.info(
+            f"Pulled {len(entries)}/{len(parsed_feed.channel.items)} new entries from '{rss_feed}'"
+        )
         for article in entries:
             # todo suboptimal - calculating these twice
             dt = article.pub_date.content
@@ -274,7 +278,9 @@ class TorrentFeedParser:
         for feed in self.MY_FEEDS:
             self.read_article_feed(feed, session)
         release_list = self.di.select_unchecked_feed_entries(session).all()
-        FEEDPARSER_LOG.info(f"Found {len(release_list)} unchecked entries in feeds table")
+        FEEDPARSER_LOG.info(
+            f"Found {len(release_list)} unchecked entries in feeds table"
+        )
         for release in release_list:
             result = self.do_recognize(
                 release.title,
@@ -283,7 +289,7 @@ class TorrentFeedParser:
                 parse_size(release.description),
                 session,
             )  # just use a fucking hash as torrent identity
-            if result and not ("unittest" in sys.modules.keys()):
+            if result and "unittest" not in sys.modules.keys():
                 self.torrent_save(
                     *result,
                     session,
@@ -353,7 +359,9 @@ class TorrentFeedParser:
                     mal_ids = self.di.select_mal_anime_ids_by_title_part(
                         a_title, session
                     )
-                    FEEDPARSER_LOG.info(f"Searching for '*{a_title}*' in ongoings... Found {mal_ids}")
+                    FEEDPARSER_LOG.info(
+                        f"Searching for '*{a_title}*' in ongoings... Found {mal_ids}"
+                    )
                     if mal_ids and len(mal_ids) == 1:
                         FEEDPARSER_LOG.info(f"Title part match: {mal_ids[0]}")
                         mal_id = mal_ids[0]
@@ -363,7 +371,7 @@ class TorrentFeedParser:
                         mal_id = self.get_mal_ongoing_by_title(a_title, a_ep_no)
                     # check whether we have title info
                     if mal_id:
-                        a_info = self.al.get_anime_by_aid(mal_id)
+                        self.al.get_anime_by_aid(mal_id)
                         # todo sometimes a double can make it here despite synonym check
                         self.di.insert_new_synonym(mal_id, a_title)
             self.di.update_anifeeds_with_parsed_information(
@@ -429,7 +437,9 @@ class TorrentFeedParser:
                     mal_id, group, episode, filename, res, size, session
                 )
             else:
-                FEEDPARSER_LOG.info(f"DUPLICATE: {mal_id} by {group} ep.{episode} res {res} size {size}")
+                FEEDPARSER_LOG.info(
+                    f"DUPLICATE: {mal_id} by {group} ep.{episode} res {res} size {size}"
+                )
             return filename
         else:
             return False

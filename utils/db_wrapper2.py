@@ -1,11 +1,33 @@
 import re
-from datetime import datetime, timedelta
+from datetime import timedelta, datetime
 from pprint import pprint
 
 from sqlalchemy import and_, desc, func, or_
 from sqlalchemy.orm import aliased
 
-from orm.ORMWrapper import *
+from orm.ORMWrapper import (
+    BaseRelations,
+    Anime,
+    AnimeXSynonyms,
+    AniFeeds,
+    Users,
+    Quotes,
+    ListStatus,
+    UsersXTracked,
+    Ongoings,
+    t_anime_x_producers,
+    Producers,
+    GifTags,
+    v_last_episodes,
+    Licensors,
+    AnimeXContinuations,
+    v_pending_delivery,
+    v_today_titles,
+    AnimeXSeasons,
+    Genres,
+    TorrentFiles,
+    v_extended_user_stats,
+)
 
 TYPE_LIST = ["TV", "ONA"]
 
@@ -981,7 +1003,9 @@ class DataInterface:
         ]
         for licensor in new_axl:
             licensor_ = (
-                session.query(Licensors).filter(Licensors.name == licensor["name"]).first()
+                session.query(Licensors)
+                .filter(Licensors.name == licensor["name"])
+                .first()
             )
             anime_.licensors.append(licensor_)
 

@@ -9,7 +9,11 @@ import copy
 import dill as pickle
 
 from orm.ORMWrapper import VotedCharacters
-from .exceptions import DuplicateVotingItemsError, VotingIsFinishedError, InvalidVotesError
+from .exceptions import (
+    DuplicateVotingItemsError,
+    VotingIsFinishedError,
+    InvalidVotesError,
+)
 
 from typing import TYPE_CHECKING, List, Dict
 
@@ -23,6 +27,7 @@ class Displayable(abc.ABC):
     """
     Abstract base with minimal required parameters for displaying an entry in a voting
     """
+
     @abc.abstractmethod
     def get_picture(self) -> str:
         """Returns picture path"""
@@ -111,7 +116,7 @@ class VotingSystem:
                 vs = cls._restore()
                 bot_data[cls.bot_data_param] = vs
             except FileNotFoundError:
-                raise HandlerError(f"Не ведётся никакое текущее голосование!")
+                raise HandlerError("Не ведётся никакое текущее голосование!")
 
         return vs
 
@@ -139,7 +144,9 @@ class VotingSystem:
 
     def get_current_available_string(self):
         if self.stage > 0:
-            return "".join([f"{self.item_to_item_number[pos.item]:02}" for pos in self.positions])
+            return "".join(
+                [f"{self.item_to_item_number[pos.item]:02}" for pos in self.positions]
+            )
 
     def set_user_votes(self, user: "Hashable", vote_list: List[bool]):
         if self.is_finished:
@@ -161,10 +168,10 @@ class VotingSystem:
 
     def _validate_votes(self, vote_list, prev_votes):
         for i in range(self.grid_size // 2):
-            if prev_votes and prev_votes[2 * i:2 * i + 2] != [False, False]:
-                if vote_list[2*i:2*i + 2] != prev_votes[2 * i:2 * i + 2]:
+            if prev_votes and prev_votes[2 * i : 2 * i + 2] != [False, False]:
+                if vote_list[2 * i : 2 * i + 2] != prev_votes[2 * i : 2 * i + 2]:
                     raise InvalidVotesError
-            if vote_list[2*i] and vote_list[2*i + 1]:
+            if vote_list[2 * i] and vote_list[2 * i + 1]:
                 # Cannot vote for both candidates in a pair
                 raise InvalidVotesError
 
@@ -190,11 +197,13 @@ class VotingSystem:
 
     def _build_seeded_bracket(self):
         random.shuffle(self.positions)
-        self.positions = sorted(self.positions, key=lambda item: item.current_votes, reverse=True)
+        self.positions = sorted(
+            self.positions, key=lambda item: item.current_votes, reverse=True
+        )
         self.results.append(copy.deepcopy(self.positions))
 
         self.grid_size = self.get_bracket_size()
-        self.positions = self.positions[:self.grid_size]
+        self.positions = self.positions[: self.grid_size]
         for seed, position in enumerate(self.positions):
             position.seed_number = seed + 1
 
@@ -204,31 +213,38 @@ class VotingSystem:
 
     def get_bracket_size(self):
         bracket_rounds = int(math.log2(len(self.items)))
-        return min(2 ** bracket_rounds, self.max_grid_size)
+        return min(2**bracket_rounds, self.max_grid_size)
 
     def _remove_losers(self):
         winner_list = [False for _ in self.positions]
         for i in range(self.grid_size // 2):
-            if self.positions[2*i].current_votes > self.positions[2*i + 1].current_votes:
-                winner_list[2*i] = True
-            elif (
-                self.positions[2*i].current_votes == self.positions[2*i + 1].current_votes
-                and self.positions[2*i].seed_number < self.positions[2*i + 1].seed_number
+            if (
+                self.positions[2 * i].current_votes
+                > self.positions[2 * i + 1].current_votes
             ):
-                winner_list[2*i] = True
+                winner_list[2 * i] = True
+            elif (
+                self.positions[2 * i].current_votes
+                == self.positions[2 * i + 1].current_votes
+                and self.positions[2 * i].seed_number
+                < self.positions[2 * i + 1].seed_number
+            ):
+                winner_list[2 * i] = True
             else:
-                winner_list[2*i + 1] = True
+                winner_list[2 * i + 1] = True
         print(winner_list)
         self.positions = list(itertools.compress(self.positions, winner_list))
         self.store()
 
     @staticmethod
     def _build_pairs(bracket_size: int):
-        nums = [0, ]
+        nums = [
+            0,
+        ]
         i = 0
         while bracket_size > len(nums):
             i += 1
-            top = 2 ** i - 1
+            top = 2**i - 1
             nums_add = [top - n for n in nums]
             nums = list(itertools.chain(*zip(nums, nums_add)))
         return nums

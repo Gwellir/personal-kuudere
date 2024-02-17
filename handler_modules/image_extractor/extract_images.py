@@ -17,7 +17,7 @@ from handler_modules.image_extractor.vk.scraper import VkScraper
 
 logger = logging.getLogger("handler.extract_images")
 
-NormalizedURL = namedtuple('NormalizedURL', ['url', 'hidden'])
+NormalizedURL = namedtuple("NormalizedURL", ["url", "hidden"])
 
 
 def _normalize_url(url):
@@ -46,13 +46,13 @@ def select_scraper(url):
 
 class TwitterExtractor(Handler):
     hosts = {
-        'twitter.com': "twitter.com",
-        'fxtwitter.com': "twitter.com",
-        'vxtwitter.com': "twitter.com",
-        'x.com': "twitter.com",
-        'vk.com': "vk.com",
-        'vk.ru': "vk.com",
-        'm.vk.com': "vk.com",
+        "twitter.com": "twitter.com",
+        "fxtwitter.com": "twitter.com",
+        "vxtwitter.com": "twitter.com",
+        "x.com": "twitter.com",
+        "vk.com": "vk.com",
+        "vk.ru": "vk.com",
+        "m.vk.com": "vk.com",
     }
 
     def __init__(self):
@@ -74,11 +74,12 @@ class TwitterExtractor(Handler):
         self.normalized_urls: List[str] = []
         for url in urls:
             scheme, host, path, query, fragment = _normalize_url(url)
-            if (host in self.hosts
-                    and _check_is_post_link(self.hosts[host], path)):
+            if host in self.hosts and _check_is_post_link(self.hosts[host], path):
                 self.hidden.append(self._check_to_hide(url))
                 host = self.hosts[host]
-                self.normalized_urls.append(urlunsplit((scheme, host, path, None, None)))
+                self.normalized_urls.append(
+                    urlunsplit((scheme, host, path, None, None))
+                )
 
         return self.normalized_urls
 
@@ -113,7 +114,11 @@ class TwitterExtractor(Handler):
                         "http": config.proxy_auth_url,
                     },
                 )
-                if res.status_code == HTTPStatus.OK and res.url != fx_url and res.url != previous_photo_url:
+                if (
+                    res.status_code == HTTPStatus.OK
+                    and res.url != fx_url
+                    and res.url != previous_photo_url
+                ):
                     previous_photo_url = res.url
                     images.append(res.url)
                 else:
@@ -131,7 +136,7 @@ class TwitterExtractor(Handler):
                 "images": images,
                 "name": name,
                 "screen_name": "",
-                "text": '<i>Could not parse tweet...</i> ...',
+                "text": "<i>Could not parse tweet...</i> ...",
             }
 
     def process(self, params: list):
@@ -152,7 +157,9 @@ class TwitterExtractor(Handler):
     def _form_media_group(item: PostData, caption):
         media_group = []
         for i, media in enumerate(item.attached_media):
-            wrapper = InputMediaPhoto if media.type == MediaType.IMAGE else InputMediaVideo
+            wrapper = (
+                InputMediaPhoto if media.type == MediaType.IMAGE else InputMediaVideo
+            )
             media_group.append(
                 wrapper(
                     media.url,
@@ -181,10 +188,12 @@ class TwitterExtractor(Handler):
             if item.url.startswith("https://twitter.com/"):
                 item.text = " ".join(item.text.split(" ")[:-1])
             # or shorten the text from vk if it's too long
-            elif len(strip_tags(item.text)) >= (remainder_len := 1024 - len(strip_tags(prefix))):
-                item.text = strip_tags(item.text)[:remainder_len - 8] + " &lt;...&gt;"
+            elif len(strip_tags(item.text)) >= (
+                remainder_len := 1024 - len(strip_tags(prefix))
+            ):
+                item.text = strip_tags(item.text)[: remainder_len - 8] + " &lt;...&gt;"
 
-            caption = '{prefix}\n\n{text}'.format(
+            caption = "{prefix}\n\n{text}".format(
                 prefix=prefix,
                 text=item.text,
             )
@@ -197,7 +206,10 @@ class TwitterExtractor(Handler):
                     api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                 )
             except BadRequest as br:
-                if br.message == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"':
+                if (
+                    br.message
+                    == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
+                ):
                     self.chat.send_message(
                         f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
                         parse_mode=ParseMode.HTML,

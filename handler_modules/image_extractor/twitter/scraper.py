@@ -12,7 +12,6 @@ from handler_modules.image_extractor.models import PostData
 
 
 class TwitterScraper(BaseScraper):
-
     def scrape(self, url: str) -> PostData | None:
         url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
@@ -20,8 +19,10 @@ class TwitterScraper(BaseScraper):
             converted_data = self._convert(post_data)
             if converted_data["attached_media"]:
                 # the only video in a tweet works fine on mobile
-                if (converted_data["attached_media"][0]["type"] == "video"
-                        and len(converted_data) == 1):
+                if (
+                    converted_data["attached_media"][0]["type"] == "video"
+                    and len(converted_data) == 1
+                ):
                     return None
                 elif converted_data["attached_media"][0]["type"] == "gif":
                     converted_data["attached_media"][0]["type"] = "video"
@@ -52,7 +53,11 @@ class TwitterScraper(BaseScraper):
             post_data,
         )
 
-        result["name"] = f'{result["screen_name"]} ({result["name"]})' if result["name"] else result["screen_name"]
+        result["name"] = (
+            f'{result["screen_name"]} ({result["name"]})'
+            if result["name"]
+            else result["screen_name"]
+        )
 
         return result
 
@@ -73,5 +78,3 @@ class TwitterScraper(BaseScraper):
             return res.json()
         else:
             return
-
-

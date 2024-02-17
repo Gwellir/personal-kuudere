@@ -115,13 +115,13 @@ class Anime(Base):
 
     def __repr__(self):
         return (
-            f"<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
-            f"<b>Type</b>: %s\n"
-            f"<b>Status</b>: %s\n"
-            f"<b>Episodes</b>: %s\n"
-            f"<b>Aired</b>: %s to %s\n"
-            f"<b>Score</b>: %s\n\n"
-            f"%s"
+            "<b>Title</b>:<a href='%s'> </a><a href='https://myanimelist.net/anime/%s'>%s</a>\n"
+            "<b>Type</b>: %s\n"
+            "<b>Status</b>: %s\n"
+            "<b>Episodes</b>: %s\n"
+            "<b>Aired</b>: %s to %s\n"
+            "<b>Score</b>: %s\n\n"
+            "%s"
             % (
                 self.image_url,
                 self.mal_aid,
@@ -163,7 +163,9 @@ class Characters(Base):
         char = session.query(Characters).filter_by(mal_cid=cid).first()
         if not char:
             remote_char = jikan.character(cid, "full")
-            anime_ids = [entry.get("anime").get("mal_id") for entry in remote_char["anime"]]
+            anime_ids = [
+                entry.get("anime").get("mal_id") for entry in remote_char["anime"]
+            ]
             related_anime = (
                 session.query(Anime).filter(Anime.mal_aid.in_(anime_ids)).all()
             )

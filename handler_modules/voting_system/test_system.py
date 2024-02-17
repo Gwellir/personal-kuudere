@@ -1,6 +1,5 @@
 import random
 import pytest
-import pprint
 
 from orm.ORMWrapper import BaseRelations, VotedCharacters, SeasonalVotings
 
@@ -69,7 +68,6 @@ def random_round_vote_set_with_checksum():
 
 
 class TestVotingSystem:
-
     def test_base_state(self, voting_system):
         assert len(voting_system.positions) == 46
         candidates = voting_system.get_current_round_candidates()
@@ -99,11 +97,23 @@ class TestVotingSystem:
         assert voting_system.grid_size == len(voting_system.positions) == 32
         assert len(voting_system.get_all_results()[0]) == 46
         # pprint.pprint(voting_system.get_all_results()[0])
-        set1 = set([res.item.voted_character.name for res in voting_system.get_all_results()[0] if res.seed_number > 0])
+        set1 = set(
+            [
+                res.item.voted_character.name
+                for res in voting_system.get_all_results()[0]
+                if res.seed_number > 0
+            ]
+        )
         set2 = set([pos.item.voted_character.name for pos in voting_system.positions])
         assert set1 == set2
 
-    def test_voting(self, voting_system, random_vote_set_with_checksum, random_round_vote_set_with_checksum, capsys):
+    def test_voting(
+        self,
+        voting_system,
+        random_vote_set_with_checksum,
+        random_round_vote_set_with_checksum,
+        capsys,
+    ):
         size = voting_system.grid_size
         votes_dict, checksum = random_vote_set_with_checksum()
         for user in votes_dict:
@@ -117,4 +127,3 @@ class TestVotingSystem:
             for user in votes_dict:
                 voting_system.set_user_votes(user, votes_dict[user][:size])
             voting_system.advance_stage()
-

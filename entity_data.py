@@ -1,4 +1,3 @@
-import html
 import re
 from collections import namedtuple
 

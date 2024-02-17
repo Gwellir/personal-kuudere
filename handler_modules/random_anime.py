@@ -239,7 +239,7 @@ class AnimeSelector(Handler):
             )
         else:
             sep = ", "
-            msg = f"<b>Случайное аниме из сохранённых списков</b>:\n"
+            msg = "<b>Случайное аниме из сохранённых списков</b>:\n"
             msg += (
                 f"<b>пользователи</b>: {sep.join(self.params.users)}\n"
                 if self.params.users

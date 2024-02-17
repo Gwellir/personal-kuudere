@@ -1,5 +1,4 @@
 import json
-import os
 from time import sleep
 from typing import List
 
@@ -23,12 +22,13 @@ class ManageVoting(Handler):
     def process(self, params: list):
         if params[0] == "start":
             session = self.br.get_session()
-            current_voting = session.query(SeasonalVotings).filter_by(is_current=True).first()
+            current_voting = (
+                session.query(SeasonalVotings).filter_by(is_current=True).first()
+            )
             candidates = (
                 session.query(VotedCharacters)
                 # .join(SeasonalVotings)
-                .filter_by(voting=current_voting)
-                .all()
+                .filter_by(voting=current_voting).all()
             )
             participants = [DisplayableCharacter(character) for character in candidates]
             vs = VotingSystem(name=current_voting.season, items=participants)
@@ -69,7 +69,7 @@ def notify_users(userlist: List[int], bot: Bot):
     for user in userlist:
         bot.send_message(
             user,
-            "Начался следующий тур голосования, чтобы принять участие, используйте команду /vote"
+            "Начался следующий тур голосования, чтобы принять участие, используйте команду /vote",
         )
         sleep(0.2)
 
@@ -77,13 +77,13 @@ def notify_users(userlist: List[int], bot: Bot):
 def generate_json(vs):
     def data_from_position(position, current=False):
         return {
-            'votes': position.current_votes if not current else None,
-            'seed_number': position.seed_number,
-            'item': {
-                'name': position.item.get_name(),
-                'title': position.item.get_category(),
-                'image': f"/img/{position.item.voted_character.id}.jpg"
-            }
+            "votes": position.current_votes if not current else None,
+            "seed_number": position.seed_number,
+            "item": {
+                "name": position.item.get_name(),
+                "title": position.item.get_category(),
+                "image": f"/img/{position.item.voted_character.id}.jpg",
+            },
         }
 
     filename = "C:\\Users\\Valion\\YandexDisk\\kuudere\\voting_stats.json"
@@ -124,39 +124,48 @@ def send_results(vs, bot):
         else:
             b_name = f"<b>{b_name}</b> ✅"
 
-        return f"{a.current_votes:02} {a_name}\n     <i>{a.item.get_category()}</i>\n" \
-               f"{b.current_votes:02} {b_name}\n     <i>{b.item.get_category()}</i>\n"
+        return (
+            f"{a.current_votes:02} {a_name}\n     <i>{a.item.get_category()}</i>\n"
+            f"{b.current_votes:02} {b_name}\n     <i>{b.item.get_category()}</i>\n"
+        )
 
     prev_results = vs.results[vs.stage - 1]
     current_positions = vs.positions
     text = ""
     if vs.stage == 1:
         separator = "\n\n<b>Вылетели:</b>"
-        scores = "\n".join([
-            f"{pos.current_votes} {pos.item.get_name()}"
-            f"{separator if i == vs.grid_size - 1 else ''}"
-            for i, pos in enumerate(prev_results)
-        ])
+        scores = "\n".join(
+            [
+                f"{pos.current_votes} {pos.item.get_name()}"
+                f"{separator if i == vs.grid_size - 1 else ''}"
+                for i, pos in enumerate(prev_results)
+            ]
+        )
         text += f"<b>Результаты отборочного тура:</b>\n\n{scores}"
     else:
-        scores = "\n".join([
-            format_pair_results(prev_results[2*i], prev_results[2*i + 1], current_positions[i])
-            for i in range(vs.grid_size)
-        ])
+        scores = "\n".join(
+            [
+                format_pair_results(
+                    prev_results[2 * i], prev_results[2 * i + 1], current_positions[i]
+                )
+                for i in range(vs.grid_size)
+            ]
+        )
         text += f"<b>Результаты тура:</b>\n\n{scores}"
-    kicked_out_chars = (
-        {(pos.item.get_name(), pos.item.get_category()) for pos in prev_results} -
-        {(pos.item.get_name(), pos.item.get_category()) for pos in current_positions}
-    )
-    kicked_out_titles = (
-        {pos.item.get_category() for pos in prev_results} -
-        {pos.item.get_category() for pos in current_positions}
-    )
+    kicked_out_chars = {
+        (pos.item.get_name(), pos.item.get_category()) for pos in prev_results
+    } - {(pos.item.get_name(), pos.item.get_category()) for pos in current_positions}
+    kicked_out_titles = {pos.item.get_category() for pos in prev_results} - {
+        pos.item.get_category() for pos in current_positions
+    }
     if kicked_out_titles:
         kicked_out_text = ""
         for title in kicked_out_titles:
             title_text = f"<b>{title}</b>:\n   "
-            title_chars_text = "\n   ".join([char[0] for char in kicked_out_chars if char[1] == title]) + "\n\n"
+            title_chars_text = (
+                "\n   ".join([char[0] for char in kicked_out_chars if char[1] == title])
+                + "\n\n"
+            )
             kicked_out_text += title_text + title_chars_text
 
         text += f"\n\n<b>Вылетевшие тайтлы:</b>\n\n{kicked_out_text}"

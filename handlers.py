@@ -29,7 +29,8 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedMpeg4Gif,
     ParseMode,
-    Update, ChatMember,
+    Update,
+    ChatMember,
 )
 from telegram.utils.helpers import mention_html
 from torrentool.torrent import Torrent
@@ -182,7 +183,7 @@ class UtilityFunctions:
                 next_id = int(self.relations[chain[0]]["Sequel"][0]["mal_id"])
                 chain.append(next_id)
             except KeyError as e:
-                if type(e.args[0]) == int:
+                if isinstance(e.args[0], int):
                     self.al.get_anime_by_aid(e.args[0])
                 print("ERROR:", e.args)
             i = 1
@@ -503,7 +504,7 @@ class HandlersStructure:
         else:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=f"Применение:\n<code>/set_q &lt;имя_цитаты&gt; &lt;цитата&gt;</code>.",
+                text="Применение:\n<code>/set_q &lt;имя_цитаты&gt; &lt;цитата&gt;</code>.",
                 parse_mode=ParseMode.HTML,
             )
 
@@ -556,7 +557,7 @@ class HandlersStructure:
         count = 0
         size = 50
         while count < len(all_titles):
-            msg = f"Список отслеживаемых торрентов:\n" if count == 0 else ""
+            msg = "Список отслеживаемых торрентов:\n" if count == 0 else ""
             torrents = "\n".join(
                 [
                     f'<a href="https://myanimelist.net/anime/{t[3]}">{t[0]}</a> ep {t[1]}\n ({t[2]})'
@@ -624,11 +625,11 @@ class HandlersStructure:
                 ]
             )
             if studios_str or animes_str:
-                msg = f"<b>Ожидаемые тайтлы</b>:\n"
+                msg = "<b>Ожидаемые тайтлы</b>:\n"
                 if studios_str:
                     msg += f"\nСтудии - {studios_list}:\n" + studios_str + "\n"
                 if animes_str:
-                    msg += f"\nАниме:\n" + animes_str
+                    msg += "\nАниме:\n" + animes_str
             else:
                 msg = "По запросу ничего не найдено!"
             context.bot.send_message(
@@ -742,7 +743,7 @@ class HandlersStructure:
             old_anime = [
                 anime
                 for anime in in_anime
-                if not (anime[0] in ongoing_ids) and (anime[0] in block_list)
+                if anime[0] not in ongoing_ids and (anime[0] in block_list)
             ]
             return info, new_anime, old_anime
 
@@ -1015,7 +1016,7 @@ class HandlersStructure:
                 update.effective_message.reply_text("Похожих изображений не найдено!")
                 return
             for res in results:
-                msg = f"<b>Найдено:</b>\n" + res
+                msg = "<b>Найдено:</b>\n" + res
                 context.bot.send_message(
                     chat_id=update.effective_chat.id,
                     text=msg,
@@ -1151,9 +1152,7 @@ class HandlersStructure:
         try:
             member = context.bot.get_chat_member(config.main_chat, tg_id)
         except BadRequest:
-            update.effective_message.reply_text(
-                f"Not found: {tg_id}"
-            )
+            update.effective_message.reply_text(f"Not found: {tg_id}")
             return
         if isinstance(member, ChatMember):
             update.effective_message.reply_text(
@@ -1226,7 +1225,7 @@ class HandlersStructure:
             else:
                 context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text=f"Пока что информация о сабберах отсутствует.",
+                    text="Пока что информация о сабберах отсутствует.",
                 )
         # select group
         elif args[0] == "sg":

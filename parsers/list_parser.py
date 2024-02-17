@@ -211,7 +211,7 @@ class ListImporter:
         return checked_list
 
     def get_animelist_mal(self, user):
-        length = user['statistics']['anime']['total_entries']
+        length = user["statistics"]["anime"]["total_entries"]
         print(user["username"], length)
         anime_list = self.jikan.userlist(
             username=user["username"],
@@ -285,7 +285,7 @@ class ListImporter:
                     self.di.update_users_service_id_for_service_nick(
                         user_id, user_entry[0]
                     )
-                except IntegrityError as e:
+                except IntegrityError:
                     pass
             else:
                 user_id = user_entry[1]
@@ -299,7 +299,7 @@ class ListImporter:
             lost = self.check_anime_table_has_anime(alist)
 
             self.di.insert_new_animelist(
-                user_id, [a for a in alist if not a["mal_aid"] in lost]
+                user_id, [a for a in alist if a["mal_aid"] not in lost]
             )
 
     def update_seasonal(self):
@@ -397,12 +397,14 @@ class ListImporter:
             cross_data = [
                 {
                     "mal_aid": anime["mal_id"],
-                    "season": str(max(
-                        AnimeSeason(*season_name.split()),
-                        AnimeSeason(anime["season"], anime["year"])
-                        if anime["season"] and anime["year"]
-                        else AnimeSeason(*season_name.split()),
-                    )),
+                    "season": str(
+                        max(
+                            AnimeSeason(*season_name.split()),
+                            AnimeSeason(anime["season"], anime["year"])
+                            if anime["season"] and anime["year"]
+                            else AnimeSeason(*season_name.split()),
+                        )
+                    ),
                 }
                 for anime in anime_list
             ]

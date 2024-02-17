@@ -10,21 +10,24 @@ from handler_modules.image_extractor.models import PostData, MediaType, PostMedi
 
 
 class VkScraper(BaseScraper):
-
     def scrape(self, url: str) -> PostData | None:
         post_data = self._vk_scrape(url)
         if post_data:
             converted_data = self._convert(post_data)
             if media_data := converted_data["attached_media"]:
                 # the only video in a vk post works fine on mobile
-                if (converted_data["attached_media"][0]["type"] == "video"
-                        and len(converted_data) == 1):
+                if (
+                    converted_data["attached_media"][0]["type"] == "video"
+                    and len(converted_data) == 1
+                ):
                     return None
 
                 media = []
                 for item in media_data:
                     if item["type"] == "photo":
-                        url = sorted(item["photo"]["sizes"], key=lambda x: x["width"])[-1]["url"]
+                        url = sorted(item["photo"]["sizes"], key=lambda x: x["width"])[
+                            -1
+                        ]["url"]
                         media.append(
                             PostMedia.model_validate(
                                 dict(
@@ -59,7 +62,7 @@ class VkScraper(BaseScraper):
 
     @lru_cache()
     def _vk_scrape(self, url):
-        request_url = f"https://api.vk.com/method/"
+        request_url = "https://api.vk.com/method/"
         posts = url.replace("https://vk.com/wall", "")
         wall_res = requests.get(
             f"{request_url}wall.getById",
@@ -86,7 +89,7 @@ class VkScraper(BaseScraper):
     @staticmethod
     @lru_cache()
     def _get_user_name_by_id(user_id: str):
-        request_url = f"https://api.vk.com/method/"
+        request_url = "https://api.vk.com/method/"
         user_id = int(user_id)
         params = {
             "extended": 0,
@@ -100,10 +103,7 @@ class VkScraper(BaseScraper):
             method = "groups.getById"
             params["group_id"] = -user_id
 
-        user_res = requests.get(
-            f"{request_url}{method}",
-            params=params
-        )
+        user_res = requests.get(f"{request_url}{method}", params=params)
         if user_res.status_code == HTTPStatus.OK:
             if user_id > 0:
                 user_data = user_res.json()["response"][0]
