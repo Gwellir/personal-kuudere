@@ -67,7 +67,21 @@ class Anime(Base):
     title_japanese = Column(String(255))
     synopsis = Column(Text)
     show_type = Column(
-        ENUM("TV", "Movie", "OVA", "Special", "ONA", "Music", "Other", "Unknown")
+        ENUM(
+            "TV",
+            "Movie",
+            "OVA",
+            "Special",
+            "ONA",
+            "Music",
+            "Other",
+            "Unknown",
+            "TV_Short",
+            "CM",
+            "PV",
+            "TV_Special",
+            "TV Special",
+        )
     )
     started_at = Column(DateTime)
     ended_at = Column(DateTime)
@@ -271,7 +285,21 @@ class ListStatus(Base):
     mal_aid = Column(BIGINT(20), primary_key=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     show_type = Column(
-        ENUM("TV", "Movie", "OVA", "Special", "ONA", "Music", "Other", "Unknown")
+        ENUM(
+            "TV",
+            "Movie",
+            "OVA",
+            "Special",
+            "ONA",
+            "Music",
+            "Other",
+            "Unknown",
+            "TV_Short",
+            "CM",
+            "PV",
+            "TV_Special",
+            "TV Special",
+        )
     )
     status = Column(TINYINT(3), nullable=False)
     watched = Column(INTEGER(10))
