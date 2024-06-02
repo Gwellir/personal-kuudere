@@ -9,6 +9,7 @@ from time import sleep
 import jikanpy
 import requests
 import simplejson
+from frozendict import frozendict
 from jikanpy import exceptions
 from sqlalchemy.exc import IntegrityError
 
@@ -131,6 +132,8 @@ class ListImporter:
         return seasonal_anime, season_name
 
     def format_anilist_response(self, answer):
+        if 'errors' in answer:
+            pprint(answer)
         page_info = answer["data"]["Page"]["mediaList"]
         airing_status_dict = {
             "FINISHED": 2,
@@ -182,7 +185,12 @@ class ListImporter:
                         AL_URL, json={"query": AL_LIST_QUERY, "variables": variables}
                     )
                     answer = response.json()
-                    sleep(1)
+                    if response.status_code == 200:
+                        sleep(2)
+                    else:
+                        sleep(10)
+                        err_count += 1
+                        continue
                     print(curr_page, err_count)
                     anime_list += self.format_anilist_response(answer)
                     has_next = answer["data"]["Page"]["pageInfo"]["hasNextPage"]
@@ -211,7 +219,7 @@ class ListImporter:
         return checked_list
 
     def get_animelist_mal(self, user):
-        length = user["statistics"]["anime"]["total_entries"]
+        length = user['statistics']['anime']['total_entries']
         print(user["username"], length)
         anime_list = self.jikan.userlist(
             username=user["username"],
@@ -285,7 +293,7 @@ class ListImporter:
                     self.di.update_users_service_id_for_service_nick(
                         user_id, user_entry[0]
                     )
-                except IntegrityError:
+                except IntegrityError as e:
                     pass
             else:
                 user_id = user_entry[1]
@@ -299,7 +307,7 @@ class ListImporter:
             lost = self.check_anime_table_has_anime(alist)
 
             self.di.insert_new_animelist(
-                user_id, [a for a in alist if a["mal_aid"] not in lost]
+                user_id, [a for a in alist if not a["mal_aid"] in lost]
             )
 
     def update_seasonal(self):
@@ -394,20 +402,18 @@ class ListImporter:
                 self.di.insert_new_axp(anime, session)
                 self.di.insert_new_axl(anime, session)
         if season_name:
-            cross_data = [
-                {
-                    "mal_aid": anime["mal_id"],
-                    "season": str(
-                        max(
-                            AnimeSeason(*season_name.split()),
-                            AnimeSeason(anime["season"], anime["year"])
-                            if anime["season"] and anime["year"]
-                            else AnimeSeason(*season_name.split()),
-                        )
-                    ),
-                }
+            cross_data = list(set([
+                frozendict(
+                    mal_aid=anime["mal_id"],
+                    season=str(max(
+                        AnimeSeason(*season_name.split()),
+                        AnimeSeason(anime["season"], anime["year"])
+                        if anime["season"] and anime["year"]
+                        else AnimeSeason(*season_name.split()),
+                    )),
+                )
                 for anime in anime_list
-            ]
+            ]))
             self.di.update_seasonal_data(cross_data, season_name, session)
         session.commit()
         session.close()
@@ -415,11 +421,11 @@ class ListImporter:
 
 if __name__ == "__main__":
     li = ListImporter(None, None, None, None, autistic=True)
-    # li.update_ani_list_status("MADGODWAR")
-    # li.update_mal_list_status()
-    # li.update_all()
+    # li.update_ani_list_status("u3m")
+    # li.update_mal_list_status("DarkElve")
+    li.update_all()
 
     # li.get_anime_season_mal()
-    li.update_seasonal()
+    # li.update_seasonal()
     br = BaseRelations()
     ListExtractor(br, DataInterface(br)).save_season_stats_as_json()
