@@ -184,11 +184,8 @@ class TwitterExtractor(Handler):
                 )
             )
 
-            # drop the t.co link to the tweet itself
-            if item.url.startswith("https://twitter.com/"):
-                item.text = " ".join(item.text.split(" ")[:-1])
             # or shorten the text from vk if it's too long
-            elif len(strip_tags(item.text)) >= (
+            if len(strip_tags(item.text)) >= (
                 remainder_len := 1024 - len(strip_tags(prefix))
             ):
                 item.text = strip_tags(item.text)[: remainder_len - 8] + " &lt;...&gt;"
