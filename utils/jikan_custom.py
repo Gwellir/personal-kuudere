@@ -167,7 +167,11 @@ class JikanCustom:
     @retried
     def anime(self, *args, **kwargs):
         self._anime = self._jikan.anime(*args, extension="full", **kwargs).get("data")
-        self._relations = self._get_formatted_relations(self._anime.get("relations"))
+        if not self._anime:
+            self._anime = self._jikan.anime(*args, **kwargs).get("data")
+            self._relations = {}
+        else:
+            self._relations = self._get_formatted_relations(self._anime.get("relations"))
         self._format_anime()
 
         return self._anime

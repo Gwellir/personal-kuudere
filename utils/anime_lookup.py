@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import jikanpy
+
 from logger.logger import ANIMEBASE_LOG
 
 
@@ -28,9 +30,13 @@ class AnimeLookup:
             if local_result
             else None
         )
-        if not local_result or not local_result.popularity or forced:
-            # or datetime.now() - local_result.synced > timedelta(days=14):
-            output = self._jikan.anime(mal_aid)
+        if (not local_result or not local_result.popularity or forced
+            or datetime.now() - local_result.synced > timedelta(days=14)):
+            try:
+                output = self._jikan.anime(mal_aid)
+            except jikanpy.exceptions.APIException:
+                ANIMEBASE_LOG.warning(f"Not found: {mal_aid}")
+                output = None
             if not output:
                 return answer
             self.store_anime(output)
