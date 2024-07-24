@@ -37,11 +37,11 @@ def retried(func):
                 ConnectionResetError,
                 http.client.RemoteDisconnected,
             ) as e:
-                if e.args[0] == 404:
+                if e.args[0] in (404, 504,):
                     raise e
                 err_count += 1
                 wait_s = config.JIKAN_DELAY * err_count
-                print(f"API inaccessible x{err_count}: waiting for {wait_s} seconds...")
+                print(f"API {e} inaccessible x{err_count}: waiting for {wait_s} seconds...")
                 sleep(wait_s)
                 continue
 
