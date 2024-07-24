@@ -61,10 +61,10 @@ class AnimeLookup:
 
             mal_info = [
                 (
-                    result["mal_id"],
+                    result["mal_aid"],
                     result["title"],
-                    result["airing"],
-                    result["type"],
+                    result["status"] == "Currently Airing",
+                    result["show_type"],
                     result["members"],
                 )
                 for result in search_results
@@ -77,10 +77,10 @@ class AnimeLookup:
         elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
             result = self.get_anime_by_aid(mal_info[0][0])
             mal_info[0] = (
-                result["mal_id"],
+                result["mal_aid"],
                 result["title"],
-                result["airing"],
-                result["type"],
+                result["status"] == "Currently Airing",
+                result["show_type"],
                 result["members"],
             )
         else:
