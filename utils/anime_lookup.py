@@ -21,7 +21,7 @@ class AnimeLookup:
         local_result = self._di.select_anime_by_id(mal_aid).first()
         answer = (
             {
-                "mal_id": local_result.mal_aid,
+                "mal_aid": local_result.mal_aid,
                 "title": local_result.title,
                 "airing": local_result.status == "Currently Airing",
                 "type": local_result.show_type,
@@ -100,8 +100,8 @@ class AnimeLookup:
             parameters=params,
         )
         results = response if response else []
-        ANIMEBASE_LOG.debug(
-            f"Searching MAL for '{name}'({ongoing}): {[(res['title'], res['mal_id']) for res in results]}"
+        ANIMEBASE_LOG.info(
+            f"Searching MAL for '{name}'({ongoing}): {[(res['title'], res['mal_aid']) for res in results]}"
         )
         if ongoing:
             return self._filter_ongoing(results)

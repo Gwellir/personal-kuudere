@@ -41,7 +41,7 @@ def get_closest_match_aid(variants, title) -> Optional[int]:
         v_title = match_multiple_spaces.sub(
             " ", match_punct.sub(" ", v["title"].lower())
         ).strip()
-        mal_id = v["mal_id"]
+        mal_id = v["mal_aid"]
         if title.lower().startswith(f"{v_title} "):
             return mal_id
         d = distance(v_title, title)
@@ -309,7 +309,7 @@ class TorrentFeedParser:
         FEEDPARSER_LOG.debug(f"Found on MAL: {search_results}")
         # test for legit episode numbers as MAL sometimes returns very strange title matches
         mal_ids = [
-            result["mal_id"]
+            result["mal_aid"]
             for result in search_results
             # if (
             #         result["episodes"] is not None
