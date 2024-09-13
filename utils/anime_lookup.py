@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import jikanpy
+
 from logger.logger import ANIMEBASE_LOG
 
 
@@ -19,7 +21,7 @@ class AnimeLookup:
         local_result = self._di.select_anime_by_id(mal_aid).first()
         answer = (
             {
-                "mal_id": local_result.mal_aid,
+                "mal_aid": local_result.mal_aid,
                 "title": local_result.title,
                 "airing": local_result.status == "Currently Airing",
                 "type": local_result.show_type,
@@ -28,9 +30,13 @@ class AnimeLookup:
             if local_result
             else None
         )
-        if not local_result or not local_result.popularity or forced:
-            # or datetime.now() - local_result.synced > timedelta(days=14):
-            output = self._jikan.anime(mal_aid)
+        if (not local_result or not local_result.popularity or forced
+            or datetime.now() - local_result.synced > timedelta(days=14)):
+            try:
+                output = self._jikan.anime(mal_aid)
+            except jikanpy.exceptions.APIException:
+                ANIMEBASE_LOG.warning(f"Not found: {mal_aid}")
+                output = None
             if not output:
                 return answer
             self.store_anime(output)
@@ -55,10 +61,10 @@ class AnimeLookup:
 
             mal_info = [
                 (
-                    result["mal_id"],
+                    result["mal_aid"],
                     result["title"],
-                    result["airing"],
-                    result["type"],
+                    result["status"] == "Currently Airing",
+                    result["show_type"],
                     result["members"],
                 )
                 for result in search_results
@@ -71,10 +77,10 @@ class AnimeLookup:
         elif mal_info and datetime.now() - mal_info[0][5] > timedelta(days=14):
             result = self.get_anime_by_aid(mal_info[0][0])
             mal_info[0] = (
-                result["mal_id"],
+                result["mal_aid"],
                 result["title"],
-                result["airing"],
-                result["type"],
+                result["status"] == "Currently Airing",
+                result["show_type"],
                 result["members"],
             )
         else:
@@ -94,8 +100,8 @@ class AnimeLookup:
             parameters=params,
         )
         results = response if response else []
-        ANIMEBASE_LOG.debug(
-            f"Searching MAL for '{name}'({ongoing}): {[(res['title'], res['mal_id']) for res in results]}"
+        ANIMEBASE_LOG.info(
+            f"Searching MAL for '{name}'({ongoing}): {[(res['title'], res['mal_aid']) for res in results]}"
         )
         if ongoing:
             return self._filter_ongoing(results)

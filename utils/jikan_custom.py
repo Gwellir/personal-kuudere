@@ -25,6 +25,7 @@ def retried(func):
                 if (
                     interval := datetime.datetime.now() - LAST_HIT
                 ) < datetime.timedelta(seconds=config.JIKAN_DELAY):
+                    print(f"Waiting out a delay: {config.JIKAN_DELAY - interval.seconds} seconds...")
                     sleep(config.JIKAN_DELAY - interval.seconds)
                 LAST_HIT = datetime.datetime.now()
             except simplejson.errors.JSONDecodeError:
@@ -37,11 +38,11 @@ def retried(func):
                 ConnectionResetError,
                 http.client.RemoteDisconnected,
             ) as e:
-                if e.args[0] == 404:
+                if e.args[0] in (404, 504,):
                     raise e
                 err_count += 1
                 wait_s = config.JIKAN_DELAY * err_count
-                print(f"API inaccessible x{err_count}: waiting for {wait_s} seconds...")
+                print(f"API {e} inaccessible x{err_count}: waiting for {wait_s} seconds...")
                 sleep(wait_s)
                 continue
 
@@ -73,8 +74,9 @@ class JikanCustom:
     @staticmethod
     def _get_formatted_relations(data):
         relations: Dict[str, Any] = dict()
-        for entry in data:
-            relations[entry.get("relation")] = entry.get("entry")
+        if data:
+            for entry in data:
+                relations[entry.get("relation")] = entry.get("entry")
 
         return relations
 
@@ -167,7 +169,11 @@ class JikanCustom:
     @retried
     def anime(self, *args, **kwargs):
         self._anime = self._jikan.anime(*args, extension="full", **kwargs).get("data")
-        self._relations = self._get_formatted_relations(self._anime.get("relations"))
+        if not self._anime:
+            self._anime = self._jikan.anime(*args, **kwargs).get("data")
+            self._relations = {}
+        else:
+            self._relations = self._get_formatted_relations(self._anime.get("relations"))
         self._format_anime()
 
         return self._anime
@@ -177,8 +183,18 @@ class JikanCustom:
         return self._jikan.character(*args, **kwargs).get("data")
 
     @retried
-    def search(self, *args, **kwargs):
-        return self._jikan.search(*args, **kwargs).get("data")
+    def search(self, type_, query, *args, **kwargs):
+        results = self._jikan.search(type_, query, *args, **kwargs).get("data")
+        if type_ == "anime":
+            formatted_results = []
+            for res in results:
+                self._anime = res
+                self._relations = self._get_formatted_relations(self._anime.get("relations"))
+                self._format_anime()
+                formatted_results.append(self._anime)
+            results = formatted_results
+                
+        return results
 
     def season(self, page: Optional[int] = None, *args, **kwargs):
         @retried

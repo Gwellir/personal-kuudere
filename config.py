@@ -57,6 +57,6 @@ class TimeoutRequestsSession(requests.Session):
 jikan_session = TimeoutRequestsSession()
 jikan_params = dict(
     selected_base="https://api.jikan.moe/v4",
-    # selected_base="https://katou.moe/jikan/v3",
+    #selected_base="https://katou.moe/jikan/v3",
     session=jikan_session,
 )
