@@ -21,6 +21,10 @@ logger = logging.getLogger("handler.extract_images")
 NormalizedURL = namedtuple("NormalizedURL", ["url", "hidden"])
 
 
+twitter_scraper = TwitterScraper()
+vk_scraper = VkScraper()
+
+
 def _normalize_url(url):
     host: str
     scheme, host, path, query, fragment = urlsplit(url)
@@ -29,18 +33,19 @@ def _normalize_url(url):
     return scheme, host, path, query, fragment
 
 
-def _check_is_post_link(service: str, path: str):
+def _check_is_post_link(service: str, url: str) -> bool:
     if service == "twitter.com":
-        return path.find("/status/") >= 0
+        return url.find("/status/") >= 0
     elif service == "vk.com":
-        return path.find("/wall") >= 0 or path.find('?w=wall') >= 0
+        if vk_scraper.pattern.findall(url):
+            return True
 
 
 def select_scraper(url):
     if "twitter.com" in url:
-        return TwitterScraper
+        return twitter_scraper
     elif "vk.com" in url:
-        return VkScraper
+        return vk_scraper
     else:
         return None
 
@@ -75,13 +80,13 @@ class TwitterExtractor(Handler):
         self.normalized_urls: List[str] = []
         for url in urls:
             scheme, host, path, query, fragment = _normalize_url(url)
-            if host in self.hosts and _check_is_post_link(self.hosts[host], path):
+            if host in self.hosts and _check_is_post_link(self.hosts[host], url):
                 self.hidden.append(self._check_to_hide(url))
                 host = self.hosts[host]
                 self.normalized_urls.append(
                     urlunsplit((scheme, host, path, query, None))
                 )
-
+        logger.info(self.normalized_urls)
         return self.normalized_urls
 
     def _resolve_url(self, url):
@@ -102,8 +107,8 @@ class TwitterExtractor(Handler):
     def process(self, params: list):
         posts_with_media = []
         for num, url in enumerate(params):
-            Scraper = select_scraper(url)
-            post_data = Scraper().scrape(url)
+            scraper = select_scraper(url)
+            post_data = scraper.scrape(url)
             has_media = False
             if post_data:
                 posts_with_media.append(post_data)
