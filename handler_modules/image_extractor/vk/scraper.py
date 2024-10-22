@@ -15,7 +15,7 @@ class VkScraper(BaseScraper):
         super().__init__()
         self.request_url = "https://api.vk.com/method/"
         self.pattern = re.compile(
-            r"https://vk\.com/.*(wall|photo)(-?\d+_\d+)$"
+            r"https://vk\.com/.*(wall|photo)(-?\d+_\d+).*"
         )
         
     def scrape(self, url: str) -> PostData | None:
@@ -70,7 +70,7 @@ class VkScraper(BaseScraper):
     @lru_cache()
     def _vk_scrape(self, url):
         try:
-            endpoint, post_id = self.pattern.findall(url)[0]
+            endpoint, post_id = self.pattern.findall(url)[-1]
         except IndexError:
             return
         if endpoint == "wall":
@@ -112,7 +112,7 @@ class VkScraper(BaseScraper):
         wall_res = requests.get(
             f"{self.request_url}wall.getById",
             params={
-                "post_id": post_id,
+                "posts": post_id,
                 "extended": 0,
                 "v": "5.199",
                 "access_token": config.vk_token,

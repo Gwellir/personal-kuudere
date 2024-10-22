@@ -79,7 +79,7 @@ class TwitterExtractor(Handler):
                 self.hidden.append(self._check_to_hide(url))
                 host = self.hosts[host]
                 self.normalized_urls.append(
-                    urlunsplit((scheme, host, path, None, None))
+                    urlunsplit((scheme, host, path, query, None))
                 )
 
         return self.normalized_urls
