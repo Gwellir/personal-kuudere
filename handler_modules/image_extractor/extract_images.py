@@ -33,7 +33,7 @@ def _check_is_post_link(service: str, path: str):
     if service == "twitter.com":
         return path.find("/status/") >= 0
     elif service == "vk.com":
-        return path.find("/wall") >= 0
+        return path.find("/wall") >= 0 or path.find('?w=wall') >= 0
 
 
 def select_scraper(url):
@@ -99,47 +99,6 @@ class TwitterExtractor(Handler):
                 break
         return url
 
-    def _get_fx_data(self, url: str):
-        name = url.split("/")[3]
-        id_ = url.split("/")[5]
-        dl_url = url.replace("twitter.com", "dl.fxtwitter.com")
-        images = []
-        previous_photo_url = ""
-        for photo_no in range(1, 5):
-            try:
-                fx_url = dl_url + "/photo/" + str(photo_no)
-                res = requests.get(
-                    fx_url,
-                    proxies={
-                        "https": config.proxy_auth_url,
-                        "http": config.proxy_auth_url,
-                    },
-                )
-                if (
-                    res.status_code == HTTPStatus.OK
-                    and res.url != fx_url
-                    and res.url != previous_photo_url
-                ):
-                    previous_photo_url = res.url
-                    images.append(res.url)
-                else:
-                    break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ):
-                break
-
-        if images:
-            return {
-                "url": url,
-                "id": id_,
-                "images": images,
-                "name": name,
-                "screen_name": "",
-                "text": "<i>Could not parse tweet...</i> ...",
-            }
-
     def process(self, params: list):
         posts_with_media = []
         for num, url in enumerate(params):
@@ -166,7 +125,7 @@ class TwitterExtractor(Handler):
                     media.url,
                     parse_mode=ParseMode.HTML,
                     # only add the caption to image #0
-                    caption=caption if not i else None,
+                    caption=caption if i == 0 else None,
                 )
             )
 

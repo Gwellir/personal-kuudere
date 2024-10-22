@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from http import HTTPStatus
 
@@ -10,15 +11,21 @@ from handler_modules.image_extractor.models import PostData, MediaType, PostMedi
 
 
 class VkScraper(BaseScraper):
+    def __init__(self):
+        super().__init__()
+        self.request_url = "https://api.vk.com/method/"
+        self.pattern = re.compile(
+            r"https://vk\.com/.*(wall|photo)(-?\d+_\d+)$"
+        )
+        
     def scrape(self, url: str) -> PostData | None:
         post_data = self._vk_scrape(url)
         if post_data:
-            converted_data = self._convert(post_data)
-            if media_data := converted_data["attached_media"]:
+            if media_data := post_data["attached_media"]:
                 # the only video in a vk post works fine on mobile
                 if (
-                    converted_data["attached_media"][0]["type"] == "video"
-                    and len(converted_data) == 1
+                    post_data["attached_media"][0]["type"] == "video"
+                    and len(post_data) == 1
                 ):
                     return None
 
@@ -38,15 +45,15 @@ class VkScraper(BaseScraper):
                         )
                     elif item["type"] == "video":
                         pass
-                converted_data["attached_media"] = media
+                post_data["attached_media"] = media
 
-            converted_data["url"] = url
-            converted_data["id"] = str(converted_data["id"])
+            post_data["url"] = url
+            post_data["id"] = str(post_data["id"])
 
-            return PostData.model_validate(converted_data)
+            return PostData.model_validate(post_data)
 
     @staticmethod
-    def _convert(post_data) -> dict:
+    def _convert_data(post_data) -> dict:
         result = jmespath.search(
             """{
             name: name,
@@ -62,29 +69,62 @@ class VkScraper(BaseScraper):
 
     @lru_cache()
     def _vk_scrape(self, url):
-        request_url = "https://api.vk.com/method/"
-        posts = url.replace("https://vk.com/wall", "")
-        wall_res = requests.get(
-            f"{request_url}wall.getById",
+        try:
+            endpoint, post_id = self.pattern.findall(url)[0]
+        except IndexError:
+            return
+        if endpoint == "wall":
+            return self._get_wall_post(post_id)
+        elif endpoint == "photo":
+            return self._get_photo_post(post_id)
+        else:
+            return
+        
+    @lru_cache()
+    def _get_photo_post(self, post_id):
+        photo_res = requests.get(
+            f"{self.request_url}photos.getById",
             params={
-                "posts": posts,
+                "photos": post_id,
                 "extended": 0,
                 "v": "5.199",
                 "access_token": config.vk_token,
             },
-            #proxies={
-             #   "https": config.proxy_auth_url,
-              #  "http": config.proxy_auth_url,
-            #},
+        )
+        if photo_res.status_code == HTTPStatus.OK:
+            photo_obj = photo_res.json()["response"][0]
+            user_name = self._get_user_name_by_id(photo_obj["owner_id"])
+            photo_post = dict(
+                text=photo_obj["text"],
+                id=photo_obj["id"],
+                user_id=photo_obj["owner_id"],
+                name=user_name if user_name else "",
+                attached_media=[dict(
+                    photo=photo_obj,
+                    type="photo",
+                )],
+            )
+
+            return photo_post
+
+    @lru_cache()
+    def _get_wall_post(self, post_id):
+        wall_res = requests.get(
+            f"{self.request_url}wall.getById",
+            params={
+                "post_id": post_id,
+                "extended": 0,
+                "v": "5.199",
+                "access_token": config.vk_token,
+            },
         )
         if wall_res.status_code == HTTPStatus.OK:
             wall_post = wall_res.json()["response"]["items"][0]
             user_name = self._get_user_name_by_id(wall_post["from_id"])
             if user_name:
                 wall_post["name"] = user_name
-            return wall_post
-        else:
-            return
+            post_data = self._convert_data(wall_post)
+            return post_data
 
     @staticmethod
     @lru_cache()

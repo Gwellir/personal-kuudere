@@ -78,3 +78,44 @@ class TwitterScraper(BaseScraper):
             return res.json()
         else:
             return
+
+    def _get_fx_data(self, url: str):
+        name = url.split("/")[3]
+        id_ = url.split("/")[5]
+        dl_url = url.replace("twitter.com", "dl.fxtwitter.com")
+        images = []
+        previous_photo_url = ""
+        for photo_no in range(1, 5):
+            try:
+                fx_url = dl_url + "/photo/" + str(photo_no)
+                res = requests.get(
+                    fx_url,
+                    proxies={
+                        "https": config.proxy_auth_url,
+                        "http": config.proxy_auth_url,
+                    },
+                )
+                if (
+                    res.status_code == HTTPStatus.OK
+                    and res.url != fx_url
+                    and res.url != previous_photo_url
+                ):
+                    previous_photo_url = res.url
+                    images.append(res.url)
+                else:
+                    break
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ConnectTimeout,
+            ):
+                break
+
+        if images:
+            return {
+                "url": url,
+                "id": id_,
+                "images": images,
+                "name": name,
+                "screen_name": "",
+                "text": "<i>Could not parse tweet...</i> ...",
+            }
