@@ -1,3 +1,4 @@
+import logging
 import re
 from functools import lru_cache
 from http import HTTPStatus
@@ -8,6 +9,9 @@ import requests
 import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
 from handler_modules.image_extractor.models import PostData, MediaType, PostMedia
+
+
+logger = logging.getLogger("handler.vk.scraper")
 
 
 class VkScraper(BaseScraper):
@@ -21,10 +25,13 @@ class VkScraper(BaseScraper):
     def scrape(self, url: str) -> PostData | None:
         post_data = self._vk_scrape(url)
         if post_data:
-            if media_data := post_data["attached_media"]:
+            # if already cached
+            if "attached_media" in post_data and post_data["attached_media"]:
+                return PostData.model_validate(post_data)
+            if media_data := post_data["media"]:
                 # the only video in a vk post works fine on mobile
                 if (
-                    post_data["attached_media"][0]["type"] == "video"
+                    post_data["media"][0]["type"] == "video"
                     and len(post_data) == 1
                 ):
                     return None
@@ -57,7 +64,7 @@ class VkScraper(BaseScraper):
         result = jmespath.search(
             """{
             name: name,
-            attached_media: attachments[],
+            media: attachments[],
             text: text,
             id: id,
             user_id: from_id
@@ -67,7 +74,6 @@ class VkScraper(BaseScraper):
 
         return result
 
-    @lru_cache()
     def _vk_scrape(self, url):
         try:
             endpoint, post_id = self.pattern.findall(url)[-1]
@@ -99,7 +105,7 @@ class VkScraper(BaseScraper):
                 id=photo_obj["id"],
                 user_id=photo_obj["owner_id"],
                 name=user_name if user_name else "",
-                attached_media=[dict(
+                media=[dict(
                     photo=photo_obj,
                     type="photo",
                 )],
