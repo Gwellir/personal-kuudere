@@ -72,10 +72,10 @@ class VkScraper(BaseScraper):
                 "v": "5.199",
                 "access_token": config.vk_token,
             },
-            proxies={
-                "https": config.proxy_auth_url,
-                "http": config.proxy_auth_url,
-            },
+            #proxies={
+             #   "https": config.proxy_auth_url,
+              #  "http": config.proxy_auth_url,
+            #},
         )
         if wall_res.status_code == HTTPStatus.OK:
             wall_post = wall_res.json()["response"]["items"][0]

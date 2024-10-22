@@ -1,4 +1,5 @@
 import logging
+import tempfile
 from collections import namedtuple
 from http import HTTPStatus
 from typing import List
@@ -197,19 +198,46 @@ class TwitterExtractor(Handler):
             )
 
             media_group = self._form_media_group(item, caption)
-            try:
-                self.chat.send_media_group(
-                    media=media_group,
-                    disable_notification=True,
-                    api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
-                )
-            except BadRequest as br:
-                if (
-                    br.message
-                    == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
-                ):
-                    self.chat.send_message(
-                        f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
-                        parse_mode=ParseMode.HTML,
+            complete = False
+            idx = 0
+            while not complete:
+                logger.info(f"Sending media group... {media_group}")
+                try:
+                    self.chat.send_media_group(
+                        media=media_group,
                         disable_notification=True,
+                        api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                     )
+                    complete = True
+                except BadRequest as br:
+                    logger.warning(br.message)
+                    if (
+                        br.message
+                        == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
+                    ):
+                        tmp = tempfile.TemporaryFile("w+b")
+                        logger.info(f"Saving file #{idx} {media_group[idx].media}...")
+                        content = requests.get(
+                                media_group[idx].media,
+                                proxies={
+                                    "https": config.proxy_auth_url,
+                                    "http": config.proxy_auth_url,
+                                },
+                            ).content
+                        tmp.write(content)
+                        logger.info(f"Saved {len(content)} bytes into temporary file")
+                        tmp.seek(0)
+                        media_group[idx] = InputMediaVideo(
+                            tmp,
+                            parse_mode=ParseMode.HTML,
+                            caption=media_group[idx].caption if hasattr(media_group[idx], "caption") else None
+                        )
+                        tmp.close()
+                        idx += 1
+                    else:
+                        complete = True
+                        self.chat.send_message(
+                            f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
+                            parse_mode=ParseMode.HTML,
+                            disable_notification=True,
+                        )

@@ -19,12 +19,12 @@ class TwitterScraper(BaseScraper):
             converted_data = self._convert(post_data)
             if converted_data["attached_media"]:
                 # the only video in a tweet works fine on mobile
-                if (
-                    converted_data["attached_media"][0]["type"] == "video"
-                    and len(converted_data) == 1
-                ):
-                    return None
-                elif converted_data["attached_media"][0]["type"] == "gif":
+                # if (
+                #    converted_data["attached_media"][0]["type"] == "video"
+                #    and len(converted_data) == 1
+                #):
+                #    return None
+                if converted_data["attached_media"][0]["type"] == "gif":
                     converted_data["attached_media"][0]["type"] = "video"
 
             return PostData.model_validate(converted_data)
