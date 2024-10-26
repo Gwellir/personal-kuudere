@@ -1,12 +1,10 @@
 import logging
 import tempfile
 from collections import namedtuple
-from http import HTTPStatus
 from typing import List
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-from strip_tags import strip_tags
 from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
 from telegram.error import BadRequest
 
@@ -140,25 +138,10 @@ class TwitterExtractor(Handler):
         for num, item in enumerate(result):
             if not item.attached_media:
                 continue
-            prefix = (
-                'Медиа из <a href="{url}">поста</a> {name}\n'
-                '<a href="{original}">&gt; сообщение от {author} &lt;</a>'.format(
-                    original=self.message.link,
-                    author=self.user.full_name,
-                    **item.model_dump(),
-                )
-            )
 
-            item.text = strip_tags(item.text).replace("<", "&lt;").replace(">", "&gt;")
-            # or shorten the text from vk if it's too long
-            if len(item.text) >= (
-                remainder_len := 1024 - len(strip_tags(prefix))
-            ):
-                item.text = item.text[: remainder_len - 8] + " &lt;...&gt;"
-
-            caption = "{prefix}\n\n{text}".format(
-                prefix=prefix,
-                text=item.text,
+            caption = item.get_caption().format(
+                original=self.message.link,
+                author=self.user.full_name,
             )
 
             media_group = self._form_media_group(item, caption)

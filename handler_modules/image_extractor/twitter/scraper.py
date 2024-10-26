@@ -15,17 +15,17 @@ class TwitterScraper(BaseScraper):
     def scrape(self, url: str) -> PostData | None:
         url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
+        qrt_data = None
         if post_data:
             converted_data = self._convert(post_data)
+            if post_data["qrtURL"] is not None:
+                qrt_data = self._convert(post_data["qrt"])
+                converted_data["qrt"] = qrt_data
             if converted_data["attached_media"]:
-                # the only video in a tweet works fine on mobile
-                # if (
-                #    converted_data["attached_media"][0]["type"] == "video"
-                #    and len(converted_data) == 1
-                #):
-                #    return None
                 if converted_data["attached_media"][0]["type"] == "gif":
                     converted_data["attached_media"][0]["type"] = "video"
+            elif qrt_data and qrt_data["attached_media"]:
+                converted_data["attached_media"] = qrt_data["attached_media"]
 
             return PostData.model_validate(converted_data)
 
@@ -66,7 +66,7 @@ class TwitterScraper(BaseScraper):
     def _vx_scrape_tweet(url: str) -> Optional[dict]:
         """Scrape a twitter page using vxtwitter API"""
 
-        api_url = url.replace("twitter.com", "api.vxtwitter.com")
+        api_url = url.replace("twitter.com", "api.vxtwitter.com") + "/"
         res = requests.get(
             api_url,
             proxies={
