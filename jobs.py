@@ -109,6 +109,6 @@ class BotJobs:
                 checkset.update({m.group("mal_old"), m.group("mal_new")})
 
         for anime_id in checkset:
-            self.al.get_anime_by_aid(anime_id)
+            self.al.get_anime_by_aid(anime_id, cached=True)
         if entries:
             self.di.insert_new_sequel_data(entries)

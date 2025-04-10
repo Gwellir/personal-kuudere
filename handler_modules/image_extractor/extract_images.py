@@ -6,7 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError
 
 import config
 from handler_modules.base import Handler
@@ -48,6 +48,11 @@ def select_scraper(url):
         return None
 
 
+def get_bytes(file_name):
+    with open(file_name, "rb") as f:
+        return f.read()
+
+
 class TwitterExtractor(Handler):
     hosts = {
         "twitter.com": "twitter.com",
@@ -57,6 +62,7 @@ class TwitterExtractor(Handler):
         "vk.com": "vk.com",
         "vk.ru": "vk.com",
         "m.vk.com": "vk.com",
+        "vkvideo.ru": "vk.com",
     }
 
     def __init__(self):
@@ -125,7 +131,7 @@ class TwitterExtractor(Handler):
             )
             media_group.append(
                 wrapper(
-                    media.url,
+                    media.url if not media.downloaded else get_bytes(media.downloaded),
                     parse_mode=ParseMode.HTML,
                     # only add the caption to image #0
                     caption=caption if i == 0 else None,
@@ -139,22 +145,32 @@ class TwitterExtractor(Handler):
             if not item.attached_media:
                 continue
 
-            caption = item.get_caption().format(
+            caption = item.get_caption(
                 original=self.message.link,
                 author=self.user.full_name,
             )
+            
+            logger.debug(f"Caption length: {len(caption)}")
 
             media_group = self._form_media_group(item, caption)
             complete = False
             idx = 0
-            while not complete:
-                logger.info(f"Sending media group... {media_group}")
+            tries = 0
+            while not complete and tries < 10:
+                logger.info(f"Sending media group... {media_group}, {media_group[0].media}")
                 try:
                     self.chat.send_media_group(
                         media=media_group,
                         disable_notification=True,
                         api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                     )
+                    complete = True
+                except NetworkError as ne:
+                    logger.warning(f"{ne.message}")
+                    if ne.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
+                        logger.debug("Retrying...")
+                        tries += 1
+                        continue
                     complete = True
                 except BadRequest as br:
                     logger.warning(br.message)

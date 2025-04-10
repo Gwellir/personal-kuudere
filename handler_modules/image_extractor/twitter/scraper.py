@@ -1,6 +1,8 @@
+import logging
 import re
 from functools import lru_cache
 from http import HTTPStatus
+from time import sleep
 from typing import Optional
 
 import jmespath
@@ -10,16 +12,21 @@ import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
 from handler_modules.image_extractor.models import PostData
 
+logger = logging.getLogger("handler.x_scraper")
+
 
 class TwitterScraper(BaseScraper):
     def scrape(self, url: str) -> PostData | None:
         url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
+        logger.debug(f"got data from vx api: {post_data}")
         qrt_data = None
         if post_data:
             converted_data = self._convert(post_data)
+            logger.debug(f"converted to common format: {converted_data}")
             if post_data["qrtURL"] is not None:
                 qrt_data = self._convert(post_data["qrt"])
+                logger.debug(f"got QRT data: {qrt_data}")
                 converted_data["qrt"] = qrt_data
             if converted_data["attached_media"]:
                 if converted_data["attached_media"][0]["type"] == "gif":
@@ -67,17 +74,24 @@ class TwitterScraper(BaseScraper):
         """Scrape a twitter page using vxtwitter API"""
 
         api_url = url.replace("twitter.com", "api.vxtwitter.com") + "/"
-        res = requests.get(
-            api_url,
-            proxies={
-                "https": config.proxy_auth_url,
-                "http": config.proxy_auth_url,
-            },
-        )
-        if res.status_code == HTTPStatus.OK:
-            return res.json()
-        else:
-            return
+        retries = 0
+        completed = False
+        while not completed and retries < 5:
+            res = requests.get(
+                api_url,
+                proxies={
+                    "https": config.proxy_auth_url,
+                    "http": config.proxy_auth_url,
+                },
+            )
+            if res.status_code == HTTPStatus.OK:
+                completed = True
+                return res.json()
+            elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
+                sleep(1)
+                retries += 1
+            else:
+                return
 
     def _get_fx_data(self, url: str):
         name = url.split("/")[3]

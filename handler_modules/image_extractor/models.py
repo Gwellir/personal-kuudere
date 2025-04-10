@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import logging
+
 from enum import Enum
 from typing import ForwardRef
 
@@ -5,7 +9,7 @@ from pydantic import BaseModel
 from strip_tags import strip_tags
 
 
-PostData = ForwardRef("PostData")
+logger = logging.getLogger("handler.extract_images.models")
 
 
 class MediaType(Enum):
@@ -17,6 +21,7 @@ class MediaType(Enum):
 class PostMedia(BaseModel):
     url: str
     type: MediaType
+    downloaded: str = ""
 
 
 class PostData(BaseModel):
@@ -27,15 +32,18 @@ class PostData(BaseModel):
     name: str | None = ""
     qrt: PostData | None = None
 
-    def __str__(self):
+    def get_caption(self, original: str, author: str):
         prefix = (
             'Медиа из {qrt}<a href="{url}">поста</a> {name}\n'.format(
                 url=self.url,
                 name=self.name,
-                qrt="QRT " if self.attached_media == self.qrt.attached_media else "",
+                qrt="QRT " if self.qrt and self.attached_media == self.qrt.attached_media else "",
             )
         )
-        prefix += '<a href="{original}">&gt; сообщение от {author} &lt;</a>'
+        prefix += '<a href="{original}">&gt; сообщение от {author} &lt;</a>'.format(
+            original=original,
+            author=author,
+        )
 
         text = strip_tags(self.text).replace("<", "&lt;").replace(">", "&gt;")
         # or shorten the text from vk if it's too long
@@ -49,9 +57,11 @@ class PostData(BaseModel):
                      f"\n<i><a href='{self.qrt.url}'>QRT</a> ({self.qrt.name}):</i>"
                      f"\n\n{self.qrt.text}")
 
-        return "{prefix}\n\n{text}".format(
+        caption = "{prefix}\n\n{text}".format(
             prefix=prefix,
             text=text,
         )
 
-    get_caption = __str__
+        logger.debug(f"Caption length: {len(strip_tags(caption))}")
+
+        return caption

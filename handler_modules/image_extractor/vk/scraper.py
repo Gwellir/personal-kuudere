@@ -1,10 +1,12 @@
 import logging
+import os
 import re
 from functools import lru_cache
 from http import HTTPStatus
 
 import jmespath
 import requests
+import yt_dlp
 
 import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
@@ -14,12 +16,25 @@ from handler_modules.image_extractor.models import PostData, MediaType, PostMedi
 logger = logging.getLogger("handler.vk.scraper")
 
 
+YT_DLP_OPTS = {
+    'compat_opts': {'manifest-filesize-approx'},
+    'extract_flat': 'discard_in_playlist',
+    'format': '(bv*[protocol*=m3u8]+ba/b[protocol*=m3u8])[filesize_approx<45M]',
+    'fragment_retries': 10,
+    'ignoreerrors': 'only_download',
+    'outtmpl': {'default': 'media/vk_output.mp4'},
+    'postprocessors': [{'key': 'FFmpegConcat',
+                        'only_multi_video': True,
+                        'when': 'playlist'}],
+    'retries': 10}
+
+
 class VkScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.request_url = "https://api.vk.com/method/"
         self.pattern = re.compile(
-            r"https://vk\.com/.*(wall|photo)(-?\d+_\d+).*"
+            r"https://.*vk.*(wall|photo|video|clip)(-?\d+_\d+).*"
         )
         
     def scrape(self, url: str) -> PostData | None:
@@ -29,14 +44,34 @@ class VkScraper(BaseScraper):
             if "attached_media" in post_data and post_data["attached_media"]:
                 return PostData.model_validate(post_data)
             if media_data := post_data["media"]:
+                media = []
                 # the only video in a vk post works fine on mobile
                 if (
                     post_data["media"][0]["type"] == "video"
-                    and len(post_data) == 1
+                    and len(post_data["media"]) == 1
                 ):
-                    return None
+                    logger.info(f"Downloading VK video for: {url} to vk_output.mp4...")
+                    if os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
+                        os.remove(YT_DLP_OPTS["outtmpl"]["default"])
+                    with yt_dlp.YoutubeDL(YT_DLP_OPTS) as ydl:
+                        ydl.download(url)
+                    
+                    # if the video file doesn't exist then ytdlp failed to get it 
+                    # (usually due to the video being too long)
+                    if not os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
+                        return None    
+                    
+                    media.append(
+                        PostMedia.model_validate(
+                            dict(
+                                url=url,
+                                type=MediaType.VIDEO,
+                                downloaded=YT_DLP_OPTS["outtmpl"]["default"],
+                            )
+                        )
+                    )
 
-                media = []
+
                 for item in media_data:
                     if item["type"] == "photo":
                         url = sorted(item["photo"]["sizes"], key=lambda x: x["width"])[
@@ -83,9 +118,25 @@ class VkScraper(BaseScraper):
             return self._get_wall_post(post_id)
         elif endpoint == "photo":
             return self._get_photo_post(post_id)
+        elif endpoint in ["clip", "video"]:
+            return self._get_video_post(post_id)
         else:
             return
-        
+    
+    def _get_video_post(self, post_id):
+        video_post = dict(
+            text="Video from VK",
+            id=post_id,
+            user_id=post_id.split("_")[0],
+            name="",
+            media=[dict(
+                video=None,
+                type="video",
+            )],
+        )
+
+        return video_post
+    
     @lru_cache()
     def _get_photo_post(self, post_id):
         photo_res = requests.get(
