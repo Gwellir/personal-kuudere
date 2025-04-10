@@ -20,3 +20,9 @@ config.py
 /data/
 
 venv/
+
+*.pickle
+media/
+cache/
+list_parser.py
+data.json

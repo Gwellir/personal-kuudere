@@ -1,13 +1,12 @@
 import logging
+import tempfile
 from collections import namedtuple
-from http import HTTPStatus
 from typing import List
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-from strip_tags import strip_tags
 from telegram import InputMediaPhoto, ParseMode, InputMediaVideo
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError
 
 import config
 from handler_modules.base import Handler
@@ -20,6 +19,10 @@ logger = logging.getLogger("handler.extract_images")
 NormalizedURL = namedtuple("NormalizedURL", ["url", "hidden"])
 
 
+twitter_scraper = TwitterScraper()
+vk_scraper = VkScraper()
+
+
 def _normalize_url(url):
     host: str
     scheme, host, path, query, fragment = urlsplit(url)
@@ -28,20 +31,26 @@ def _normalize_url(url):
     return scheme, host, path, query, fragment
 
 
-def _check_is_post_link(service: str, path: str):
+def _check_is_post_link(service: str, url: str) -> bool:
     if service == "twitter.com":
-        return path.find("/status/") >= 0
+        return url.find("/status/") >= 0
     elif service == "vk.com":
-        return path.find("/wall") >= 0
+        if vk_scraper.pattern.findall(url):
+            return True
 
 
 def select_scraper(url):
     if "twitter.com" in url:
-        return TwitterScraper
+        return twitter_scraper
     elif "vk.com" in url:
-        return VkScraper
+        return vk_scraper
     else:
         return None
+
+
+def get_bytes(file_name):
+    with open(file_name, "rb") as f:
+        return f.read()
 
 
 class TwitterExtractor(Handler):
@@ -53,6 +62,7 @@ class TwitterExtractor(Handler):
         "vk.com": "vk.com",
         "vk.ru": "vk.com",
         "m.vk.com": "vk.com",
+        "vkvideo.ru": "vk.com",
     }
 
     def __init__(self):
@@ -74,13 +84,13 @@ class TwitterExtractor(Handler):
         self.normalized_urls: List[str] = []
         for url in urls:
             scheme, host, path, query, fragment = _normalize_url(url)
-            if host in self.hosts and _check_is_post_link(self.hosts[host], path):
+            if host in self.hosts and _check_is_post_link(self.hosts[host], url):
                 self.hidden.append(self._check_to_hide(url))
                 host = self.hosts[host]
                 self.normalized_urls.append(
-                    urlunsplit((scheme, host, path, None, None))
+                    urlunsplit((scheme, host, path, query, None))
                 )
-
+        logger.info(self.normalized_urls)
         return self.normalized_urls
 
     def _resolve_url(self, url):
@@ -98,52 +108,11 @@ class TwitterExtractor(Handler):
                 break
         return url
 
-    def _get_fx_data(self, url: str):
-        name = url.split("/")[3]
-        id_ = url.split("/")[5]
-        dl_url = url.replace("twitter.com", "dl.fxtwitter.com")
-        images = []
-        previous_photo_url = ""
-        for photo_no in range(1, 5):
-            try:
-                fx_url = dl_url + "/photo/" + str(photo_no)
-                res = requests.get(
-                    fx_url,
-                    proxies={
-                        "https": config.proxy_auth_url,
-                        "http": config.proxy_auth_url,
-                    },
-                )
-                if (
-                    res.status_code == HTTPStatus.OK
-                    and res.url != fx_url
-                    and res.url != previous_photo_url
-                ):
-                    previous_photo_url = res.url
-                    images.append(res.url)
-                else:
-                    break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ):
-                break
-
-        if images:
-            return {
-                "url": url,
-                "id": id_,
-                "images": images,
-                "name": name,
-                "screen_name": "",
-                "text": "<i>Could not parse tweet...</i> ...",
-            }
-
     def process(self, params: list):
         posts_with_media = []
         for num, url in enumerate(params):
-            Scraper = select_scraper(url)
-            post_data = Scraper().scrape(url)
+            scraper = select_scraper(url)
+            post_data = scraper.scrape(url)
             has_media = False
             if post_data:
                 posts_with_media.append(post_data)
@@ -162,10 +131,10 @@ class TwitterExtractor(Handler):
             )
             media_group.append(
                 wrapper(
-                    media.url,
+                    media.url if not media.downloaded else get_bytes(media.downloaded),
                     parse_mode=ParseMode.HTML,
                     # only add the caption to image #0
-                    caption=caption if not i else None,
+                    caption=caption if i == 0 else None,
                 )
             )
 
@@ -175,41 +144,63 @@ class TwitterExtractor(Handler):
         for num, item in enumerate(result):
             if not item.attached_media:
                 continue
-            prefix = (
-                'Медиа из <a href="{url}">поста</a> {name}\n'
-                '<a href="{original}">&gt; сообщение от {author} &lt;</a>'.format(
-                    original=self.message.link,
-                    author=self.user.full_name,
-                    **item.model_dump(),
-                )
-            )
 
-            item.text = strip_tags(item.text).replace("<", "&lt;").replace(">", "&gt;")
-            # or shorten the text from vk if it's too long
-            if len(item.text) >= (
-                remainder_len := 1024 - len(strip_tags(prefix))
-            ):
-                item.text = item.text[: remainder_len - 8] + " &lt;...&gt;"
-
-            caption = "{prefix}\n\n{text}".format(
-                prefix=prefix,
-                text=item.text,
+            caption = item.get_caption(
+                original=self.message.link,
+                author=self.user.full_name,
             )
+            
+            logger.debug(f"Caption length: {len(caption)}")
 
             media_group = self._form_media_group(item, caption)
-            try:
-                self.chat.send_media_group(
-                    media=media_group,
-                    disable_notification=True,
-                    api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
-                )
-            except BadRequest as br:
-                if (
-                    br.message
-                    == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
-                ):
-                    self.chat.send_message(
-                        f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
-                        parse_mode=ParseMode.HTML,
+            complete = False
+            idx = 0
+            tries = 0
+            while not complete and tries < 10:
+                logger.info(f"Sending media group... {media_group}, {media_group[0].media}")
+                try:
+                    self.chat.send_media_group(
+                        media=media_group,
                         disable_notification=True,
+                        api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                     )
+                    complete = True
+                except NetworkError as ne:
+                    logger.warning(f"{ne.message}")
+                    if ne.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
+                        logger.debug("Retrying...")
+                        tries += 1
+                        continue
+                    complete = True
+                except BadRequest as br:
+                    logger.warning(br.message)
+                    if (
+                        br.message
+                        == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
+                    ):
+                        tmp = tempfile.TemporaryFile("w+b")
+                        logger.info(f"Saving file #{idx} {media_group[idx].media}...")
+                        content = requests.get(
+                                media_group[idx].media,
+                                proxies={
+                                    "https": config.proxy_auth_url,
+                                    "http": config.proxy_auth_url,
+                                },
+                            ).content
+                        tmp.write(content)
+                        logger.info(f"Saved {len(content)} bytes into temporary file")
+                        tmp.seek(0)
+                        media_group[idx] = InputMediaVideo(
+                            tmp,
+                            parse_mode=ParseMode.HTML,
+                            caption=media_group[idx].caption if hasattr(media_group[idx], "caption") else None
+                        )
+                        tmp.close()
+                        idx += 1
+                    else:
+                        complete = True
+                        self.chat.send_message(
+                            f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
+                            parse_mode=ParseMode.HTML,
+                            disable_notification=True,
+                        )

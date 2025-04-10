@@ -39,15 +39,17 @@ def get_closest_match_aid(variants, title) -> Optional[int]:
     closest_match = None
     for v in variants:
         v_title = match_multiple_spaces.sub(
-            " ", match_punct.sub(" ", v["title"].lower())
+            " ", match_punct.sub(" ", v["title"].lower().replace("season", "s"))
         ).strip()
         mal_id = v["mal_aid"]
         if title.lower().startswith(f"{v_title} "):
             return mal_id
         d = distance(v_title, title)
+        FEEDPARSER_LOG.debug(f"calculating distance: {v_title}, {title}: {d}")
         if d < min_dist:
             min_dist = d
             closest_match = mal_id
+    FEEDPARSER_LOG.debug(f"Selected {closest_match} out of {variants} - {title}")
     return closest_match
 
 
@@ -316,9 +318,10 @@ class TorrentFeedParser:
             #         and (result["episodes"] == 0 or result["episodes"] >= a_ep_no)
             # )
         ]
-
-        FEEDPARSER_LOG.warning(f"Failed to resolve '{a_title}' precisely: {mal_ids}")
+        
+        
         if search_results and len(search_results) > 1:
+            FEEDPARSER_LOG.warning(f"Failed to resolve '{a_title}' precisely: {mal_ids}")
             mal_id = get_closest_match_aid(search_results, query.lower())
         elif search_results:
             mal_id = mal_ids[0]
@@ -413,7 +416,7 @@ class TorrentFeedParser:
             FEEDPARSER_LOG.info(f"  >>> FAKE {title} - {episode} by {group}")
             return
         is_downloaded = False
-        title = re.sub(r"[|/\\?:<>]", " ", title)
+        title = re.sub(r"[|/\\?:<>\"]", " ", title)
         r = requests.get(link, proxies={"https": config.proxy_auth_url})
         filename = (
             f"torrents/[{group}] {title}({mal_id}) - {episode:0>2}"

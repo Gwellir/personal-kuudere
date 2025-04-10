@@ -19,6 +19,7 @@ rss-parser==1.2.1
 saucenao-api==2.4.0
 strip-tags==0.5.1
 torrentool==1.2.0
+yt_dlp
 
 jmespath==1.0.1
 nested-lookup==0.2.25

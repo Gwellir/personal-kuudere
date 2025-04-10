@@ -17,7 +17,7 @@ class AnimeLookup:
         session.commit()
         session.close()
 
-    def get_anime_by_aid(self, mal_aid, forced=False):
+    def get_anime_by_aid(self, mal_aid, forced=False, cached=False):
         local_result = self._di.select_anime_by_id(mal_aid).first()
         answer = (
             {
@@ -31,8 +31,9 @@ class AnimeLookup:
             else None
         )
         if (not local_result or not local_result.popularity or forced
-            or datetime.now() - local_result.synced > timedelta(days=14)):
+            or (not cached and datetime.now() - local_result.synced > timedelta(days=14))):
             try:
+                ANIMEBASE_LOG.debug(f"Updating anime info for id: {mal_aid}, cached={cached}, forced={forced}")
                 output = self._jikan.anime(mal_aid)
             except jikanpy.exceptions.APIException:
                 ANIMEBASE_LOG.warning(f"Not found: {mal_aid}")
@@ -108,6 +109,7 @@ class AnimeLookup:
         return results
 
     def _filter_ongoing(self, results: list) -> list:
+        ANIMEBASE_LOG.debug(f"Filtering ongoing from MAL results: {results}")
         ong_types = ["TV", "ONA", "OVA"]
         ratings = [
             "G - All Ages",
@@ -118,9 +120,9 @@ class AnimeLookup:
         filtered = [
             res
             for res in results
-            if res.get("type") in ong_types
+            if res.get("show_type") in ong_types
             and res.get("rating") in ratings
-            and res.get("airing") is True
+            and res.get("status") == "Currently Airing"
         ]
         ANIMEBASE_LOG.debug(f"Filtered airing MAL results: {filtered}")
         return filtered

@@ -184,7 +184,7 @@ class UtilityFunctions:
                 chain.append(next_id)
             except KeyError as e:
                 if isinstance(e.args[0], int):
-                    self.al.get_anime_by_aid(e.args[0])
+                    self.al.get_anime_by_aid(e.args[0], cached=True)
                 print("ERROR:", e.args)
             i = 1
             try:
@@ -205,7 +205,7 @@ class UtilityFunctions:
             for anime_id in chain:
                 if anime_id not in self.relations:
                     try:
-                        self.al.get_anime_by_aid(anime_id)
+                        self.al.get_anime_by_aid(anime_id, cached=True)
                     except jikanpy.exceptions.APIException as e:
                         if e.args[0] == 404:
                             # если аниме с соответствующим id не существует, мы обновляем
