@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 
 from enum import Enum
-from typing import ForwardRef
 
 from pydantic import BaseModel
+from pydantic._internal import _repr
 from strip_tags import strip_tags
-
 
 logger = logging.getLogger("handler.extract_images.models")
 
@@ -21,7 +20,10 @@ class MediaType(Enum):
 class PostMedia(BaseModel):
     url: str
     type: MediaType
-    downloaded: str = ""
+    downloaded: bytes | None = None
+
+    def __repr_args__(self) -> _repr.ReprArgs:
+        return ("url", self.url), ("type", str(self.type)), ("downloaded", self.downloaded if not self.downloaded else f"{len(self.downloaded)} bytes")
 
 
 class PostData(BaseModel):

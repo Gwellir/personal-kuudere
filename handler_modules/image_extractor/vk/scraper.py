@@ -45,48 +45,43 @@ class VkScraper(BaseScraper):
                 return PostData.model_validate(post_data)
             if media_data := post_data["media"]:
                 media = []
-                # the only video in a vk post works fine on mobile
-                if (
-                    post_data["media"][0]["type"] == "video"
-                    and len(post_data["media"]) == 1
-                ):
-                    logger.info(f"Downloading VK video for: {url} to vk_output.mp4...")
-                    if os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
-                        os.remove(YT_DLP_OPTS["outtmpl"]["default"])
-                    with yt_dlp.YoutubeDL(YT_DLP_OPTS) as ydl:
-                        ydl.download(url)
-                    
-                    # if the video file doesn't exist then ytdlp failed to get it 
-                    # (usually due to the video being too long)
-                    if not os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
-                        return None    
-                    
-                    media.append(
-                        PostMedia.model_validate(
-                            dict(
-                                url=url,
-                                type=MediaType.VIDEO,
-                                downloaded=YT_DLP_OPTS["outtmpl"]["default"],
-                            )
-                        )
-                    )
-
 
                 for item in media_data:
                     if item["type"] == "photo":
-                        url = sorted(item["photo"]["sizes"], key=lambda x: x["width"])[
-                            -1
-                        ]["url"]
+                        photo_url = item["url"]
                         media.append(
                             PostMedia.model_validate(
                                 dict(
-                                    url=url,
+                                    url=photo_url,
                                     type=MediaType.IMAGE,
                                 )
                             )
                         )
                     elif item["type"] == "video":
-                        pass
+                        video_url = item["url"]
+                        logger.info(f"Downloading VK video for: {video_url} to vk_output.mp4...")
+                        if os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
+                            os.remove(YT_DLP_OPTS["outtmpl"]["default"])
+                        with yt_dlp.YoutubeDL(YT_DLP_OPTS) as ydl:
+                            ydl.download(video_url)
+
+                        # if the video file doesn't exist then ytdlp had failed to get it
+                        # (usually due to the video being too long)
+                        if not os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
+                            return None
+
+                        with open(YT_DLP_OPTS["outtmpl"]["default"], "rb") as f:
+                            video_bytes = f.read()
+
+                        media.append(
+                            PostMedia.model_validate(
+                                dict(
+                                    url=video_url,
+                                    type=MediaType.VIDEO,
+                                    downloaded=video_bytes,
+                                )
+                            )
+                        )
                 post_data["attached_media"] = media
 
             post_data["url"] = url
@@ -106,6 +101,12 @@ class VkScraper(BaseScraper):
         }""",
             post_data,
         )
+
+        for media in result["media"]:
+            if media["type"] == "photo":
+                media["url"] = sorted(media["photo"]["sizes"], key=lambda x: x["width"])[-1]["url"]
+            elif media["type"] == "video":
+                media["url"] = f'https://vk.com/video{media["video"]["owner_id"]}_{media["video"]["id"]}'
 
         return result
 
@@ -130,7 +131,7 @@ class VkScraper(BaseScraper):
             user_id=post_id.split("_")[0],
             name="",
             media=[dict(
-                video=None,
+                url=f"https://vk.com/video{post_id}",
                 type="video",
             )],
         )
@@ -157,7 +158,7 @@ class VkScraper(BaseScraper):
                 user_id=photo_obj["owner_id"],
                 name=user_name if user_name else "",
                 media=[dict(
-                    photo=photo_obj,
+                    url=sorted(photo_obj["sizes"], key=lambda x: x["width"])[-1]["url"],
                     type="photo",
                 )],
             )

@@ -48,9 +48,34 @@ def select_scraper(url):
         return None
 
 
-def get_bytes(file_name):
-    with open(file_name, "rb") as f:
+def get_bytes(file: str | bytes) -> bytes:
+    if isinstance(file, bytes):
+        return file
+    with open(file, "rb") as f:
         return f.read()
+
+
+def load_media_video_from_url(url: str, caption: str | None) -> InputMediaVideo:
+    tmp = tempfile.TemporaryFile("w+b")
+    logger.info(f"Saving file {url}...")
+    content = requests.get(
+        url,
+        proxies={
+            "https": config.proxy_auth_url,
+            "http": config.proxy_auth_url,
+        },
+    ).content
+    tmp.write(content)
+    logger.info(f"Saved {len(content)} bytes into temporary file")
+    tmp.seek(0)
+    result_media = InputMediaVideo(
+        tmp,
+        parse_mode=ParseMode.HTML,
+        caption=caption,
+    )
+    tmp.close()
+
+    return result_media
 
 
 class TwitterExtractor(Handler):
@@ -149,7 +174,7 @@ class TwitterExtractor(Handler):
                 original=self.message.link,
                 author=self.user.full_name,
             )
-            
+
             logger.debug(f"Caption length: {len(caption)}")
 
             media_group = self._form_media_group(item, caption)
@@ -165,39 +190,25 @@ class TwitterExtractor(Handler):
                         api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                     )
                     complete = True
-                except NetworkError as ne:
-                    logger.warning(f"{ne.message}")
-                    if ne.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
+                except (BadRequest, NetworkError) as exc:
+                    logger.warning(exc.message)
+                    if exc.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
                         logger.debug("Retrying...")
                         tries += 1
                         continue
-                    complete = True
-                except BadRequest as br:
-                    logger.warning(br.message)
-                    if (
-                        br.message
-                        == 'Failed to send message #1 with the error message "wrong file identifier/http url specified"'
-                    ):
-                        tmp = tempfile.TemporaryFile("w+b")
-                        logger.info(f"Saving file #{idx} {media_group[idx].media}...")
-                        content = requests.get(
-                                media_group[idx].media,
-                                proxies={
-                                    "https": config.proxy_auth_url,
-                                    "http": config.proxy_auth_url,
-                                },
-                            ).content
-                        tmp.write(content)
-                        logger.info(f"Saved {len(content)} bytes into temporary file")
-                        tmp.seek(0)
-                        media_group[idx] = InputMediaVideo(
-                            tmp,
-                            parse_mode=ParseMode.HTML,
-                            caption=media_group[idx].caption if hasattr(media_group[idx], "caption") else None
+                    elif (
+                        exc.message in (
+                            'Failed to send message #1 with the error message "wrong file identifier/http url specified"',
+                            'Failed to send message #1 with the error message "webpage_media_empty"',
                         )
-                        tmp.close()
+                    ):
+                        media_group[idx] = load_media_video_from_url(
+                            media_group[idx].media,
+                            media_group[idx].caption if hasattr(media_group[idx], "caption") else None,
+                        )
                         idx += 1
                     else:
+                        logger.error(f"Failed to send media group: {exc.message}")
                         complete = True
                         self.chat.send_message(
                             f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
