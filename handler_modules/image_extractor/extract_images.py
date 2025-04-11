@@ -48,8 +48,10 @@ def select_scraper(url):
         return None
 
 
-def get_bytes(file_name):
-    with open(file_name, "rb") as f:
+def get_bytes(file: str | bytes) -> bytes:
+    if isinstance(file, bytes):
+        return file
+    with open(file, "rb") as f:
         return f.read()
 
 
