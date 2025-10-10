@@ -84,6 +84,7 @@ class TwitterExtractor(Handler):
         "fxtwitter.com": "twitter.com",
         "vxtwitter.com": "twitter.com",
         "x.com": "twitter.com",
+        "fixupx.com": "twitter.com",
         "vk.com": "vk.com",
         "vk.ru": "vk.com",
         "m.vk.com": "vk.com",
@@ -200,6 +201,7 @@ class TwitterExtractor(Handler):
                         exc.message in (
                             'Failed to send message #1 with the error message "wrong file identifier/http url specified"',
                             'Failed to send message #1 with the error message "webpage_media_empty"',
+                            'Failed to send message #1 with the error message "webpage_curl_failed"',
                         )
                     ):
                         media_group[idx] = load_media_video_from_url(

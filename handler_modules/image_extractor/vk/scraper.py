@@ -18,10 +18,12 @@ logger = logging.getLogger("handler.vk.scraper")
 
 YT_DLP_OPTS = {
     'compat_opts': {'manifest-filesize-approx'},
+    'cookies_from_browser': 'firefox',
     'extract_flat': 'discard_in_playlist',
     'format': '(bv*[protocol*=m3u8]+ba/b[protocol*=m3u8])[filesize_approx<45M]',
     'fragment_retries': 10,
     'ignoreerrors': 'only_download',
+    'merge_output_format': 'mp4',
     'outtmpl': {'default': 'media/vk_output.mp4'},
     'postprocessors': [{'key': 'FFmpegConcat',
                         'only_multi_video': True,
