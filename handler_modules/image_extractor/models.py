@@ -47,18 +47,30 @@ class PostData(BaseModel):
             author=author,
         )
 
-        text = strip_tags(self.text).replace("<", "&lt;").replace(">", "&gt;")
+        main_text = strip_tags(self.text).replace("<", "&lt;").replace(">", "&gt;")
         # or shorten the text from vk if it's too long
-        if len(text) >= (
+        if len(main_text) >= (
             remainder_len := 1024 - len(strip_tags(prefix))
         ):
-            text = text[: remainder_len - 8] + " &lt;...&gt;"
+            main_text = main_text[: remainder_len - 8] + " &lt;...&gt;"
 
         if self.qrt:
-            text += (f"\n\n<code>---------------------------</code>"
-                     f"\n<i><a href='{self.qrt.url}'>QRT</a> ({self.qrt.name}):</i>"
-                     f"\n\n{self.qrt.text}")
-
+            full_text = main_text
+            qrt_prefix = f"\n\n<code>---------------------------</code>\n<i><a href='{self.qrt.url}'>QRT</a> ({self.qrt.name}):</i>\n\n"
+            qrt_text = self.qrt.text
+            full_text += (f"{qrt_prefix}{qrt_text}")
+            if len(full_text) >= (
+                remainder_len := 1024 - len(strip_tags(qrt_prefix)) - len(strip_tags(prefix))
+            ):
+                remainder_len = 400
+                main_text = main_text[:remainder_len] + " &lt;...&gt;"
+                qrt_text = qrt_text[:remainder_len] + " &lt;...&gt;"
+                text = f"{main_text}{qrt_prefix}{qrt_text}"
+            else:
+                text = full_text
+        else:
+            text = main_text
+        
         caption = "{prefix}\n\n{text}".format(
             prefix=prefix,
             text=text,

@@ -1,5 +1,6 @@
 import json
 import urllib.parse
+from datetime import datetime
 
 from telegram import (
     Update,
@@ -32,7 +33,7 @@ class Vote(Handler):
 
         vs = VotingSystem.get_voting(self.bot_data)
 
-        params = dict(stage=vs.stage)
+        params = dict(stage=vs.stage, tme=datetime.now().timestamp())
         if votes := vs.user_votes.get(self.user.id):
             vote_string = "".join([str(int(vote)) for vote in votes])
             params["votes"] = vote_string

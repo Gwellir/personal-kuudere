@@ -26,3 +26,4 @@ ANIMEBASE_LOG = logging.getLogger("animebase")
 
 logging.getLogger("telegram.bot").setLevel(logging.INFO)
 logging.getLogger("telegram.ext.dispatcher").setLevel(logging.INFO)
+logging.getLogger("chardet.charsetprober").setLevel(logging.INFO)
