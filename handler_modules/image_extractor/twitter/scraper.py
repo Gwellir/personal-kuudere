@@ -84,7 +84,7 @@ class TwitterScraper(BaseScraper):
                     "http": config.proxy_auth_url,
                 },
                 headers={
-                    "user-agent": "TelegramBot (like TwitterBot)",
+                    "user-agent": config.vxtwitter_user_agent,
                 },
             )
             if res.status_code == HTTPStatus.OK:
