@@ -140,9 +140,11 @@ class UtilityFunctions:
                 and "chain" in self.relations[anime.mal_aid]
             ):
                 franchise = [
-                    f'<a href="https://myanimelist.net/anime/{anime_id}">{self.relations[anime_id]["title"]}</a>'
-                    if anime_id != anime.mal_aid
-                    else f'<b>{self.relations[anime_id]["title"]}</b>'
+                    (
+                        f'<a href="https://myanimelist.net/anime/{anime_id}">{self.relations[anime_id]["title"]}</a>'
+                        if anime_id != anime.mal_aid
+                        else f'<b>{self.relations[anime_id]["title"]}</b>'
+                    )
                     for anime_id in self.relations[anime.mal_aid]["chain"]
                 ]
                 extension = " ->\n".join(franchise)
@@ -650,16 +652,20 @@ class HandlersStructure:
         if reply:
             uid, nick = (
                 reply.from_user.id,
-                reply.from_user.username
-                if reply.from_user.username
-                else reply.from_user.full_name,
+                (
+                    reply.from_user.username
+                    if reply.from_user.username
+                    else reply.from_user.full_name
+                ),
             )
         else:
             uid, nick = (
                 update.effective_user.id,
-                update.effective_user.username
-                if update.effective_user.username
-                else update.effective_user.full_name,
+                (
+                    update.effective_user.username
+                    if update.effective_user.username
+                    else update.effective_user.full_name
+                ),
             )
 
         user_list = self.di.select_user_list_address_by_tg_id(uid).first()
@@ -927,9 +933,11 @@ class HandlersStructure:
         current_status = self.di.switch_torrent_delivery(update.effective_user.id)
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="Вы включили доставку торрент-файлов."
-            if current_status
-            else "Вы отключили доставку торрент-файлов.",
+            text=(
+                "Вы включили доставку торрент-файлов."
+                if current_status
+                else "Вы отключили доставку торрент-файлов."
+            ),
         )
 
     def show_anime(self, update, context):

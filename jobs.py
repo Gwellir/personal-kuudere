@@ -88,10 +88,10 @@ class BotJobs:
     def update_continuations(self, callback):
         response = requests.get(
             "https://raw.githubusercontent.com/erengy/anime-relations/master/anime-relations.txt",
-#            proxies={
-#                "https": config.proxy_auth_url,
-#                "http": config.proxy_auth_url,
-#            },
+            #            proxies={
+            #                "https": config.proxy_auth_url,
+            #                "http": config.proxy_auth_url,
+            #            },
         )
         text_lines = response.text.split("\n")
         data_lines = [line for line in text_lines if line.startswith("- ")]

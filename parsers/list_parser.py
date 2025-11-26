@@ -132,7 +132,7 @@ class ListImporter:
         return seasonal_anime, season_name
 
     def format_anilist_response(self, answer):
-        if 'errors' in answer:
+        if "errors" in answer:
             pprint(answer)
         page_info = answer["data"]["Page"]["mediaList"]
         airing_status_dict = {
@@ -153,9 +153,11 @@ class ListImporter:
             {
                 "mal_aid": item["media"]["idMal"],
                 "title": item["media"]["title"]["romaji"],
-                "show_type": item["media"]["format"]
-                if item["media"]["format"] != "TV_SHORT"
-                else "TV",
+                "show_type": (
+                    item["media"]["format"]
+                    if item["media"]["format"] != "TV_SHORT"
+                    else "TV"
+                ),
                 "status": user_status_dict[item["status"]],
                 "watched": item["progress"],
                 "eps": item["media"]["episodes"],
@@ -219,7 +221,7 @@ class ListImporter:
         return checked_list
 
     def get_animelist_mal(self, user):
-        length = user['statistics']['anime']['total_entries']
+        length = user["statistics"]["anime"]["total_entries"]
         print(user["username"], length)
         anime_list = self.jikan.userlist(
             username=user["username"],
@@ -402,18 +404,26 @@ class ListImporter:
                 self.di.insert_new_axp(anime, session)
                 self.di.insert_new_axl(anime, session)
         if season_name:
-            cross_data = list(set([
-                frozendict(
-                    mal_aid=anime["mal_id"],
-                    season=str(max(
-                        AnimeSeason(*season_name.split()),
-                        AnimeSeason(anime["season"], anime["year"])
-                        if anime["season"] and anime["year"]
-                        else AnimeSeason(*season_name.split()),
-                    )),
+            cross_data = list(
+                set(
+                    [
+                        frozendict(
+                            mal_aid=anime["mal_id"],
+                            season=str(
+                                max(
+                                    AnimeSeason(*season_name.split()),
+                                    (
+                                        AnimeSeason(anime["season"], anime["year"])
+                                        if anime["season"] and anime["year"]
+                                        else AnimeSeason(*season_name.split())
+                                    ),
+                                )
+                            ),
+                        )
+                        for anime in anime_list
+                    ]
                 )
-                for anime in anime_list
-            ]))
+            )
             self.di.update_seasonal_data(cross_data, season_name, session)
         session.commit()
         session.close()

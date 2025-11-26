@@ -5,11 +5,11 @@ import requests
 
 
 def get_air_datetime(entry):
-    if not (aired := entry.get('aired')) or not (broadcast := entry.get('broadcast')):
+    if not (aired := entry.get("aired")) or not (broadcast := entry.get("broadcast")):
         return None
 
     # fix the date to be in Japan TZ
-    date_data = datetime.fromisoformat(aired['from'].replace("+00:00", "+09:00"))
+    date_data = datetime.fromisoformat(aired["from"].replace("+00:00", "+09:00"))
     if not broadcast.get("time") or not broadcast.get("timezone"):
         return None
 
@@ -25,10 +25,12 @@ def get_season_from_jikan():
     page = 1
     season_data = []
     while True:
-        jikan_season_page = requests.get(f"https://api.jikan.moe/v4/seasons/now?sfw&page={page}").json()
-        if page_data := jikan_season_page.get('data'):
+        jikan_season_page = requests.get(
+            f"https://api.jikan.moe/v4/seasons/now?sfw&page={page}"
+        ).json()
+        if page_data := jikan_season_page.get("data"):
             season_data.extend(page_data)
-        if page == jikan_season_page.get('pagination').get('last_visible_page'):
+        if page == jikan_season_page.get("pagination").get("last_visible_page"):
             break
         page += 1
         sleep(4)
@@ -36,19 +38,21 @@ def get_season_from_jikan():
     unique_anime = set()
     filtered_data = []
     for a in season_data:
-        if a['mal_id'] in unique_anime:
+        if a["mal_id"] in unique_anime:
             continue
         else:
-            unique_anime.add(a['mal_id'])
+            unique_anime.add(a["mal_id"])
             filtered_data.append(a)
 
     return [
-        {"name": entry["title"],
-        "MALID": entry["mal_id"],
-        "airdate_u": get_air_datetime(entry)}
-        for entry in filtered_data if get_air_datetime(entry)
+        {
+            "name": entry["title"],
+            "MALID": entry["mal_id"],
+            "airdate_u": get_air_datetime(entry),
+        }
+        for entry in filtered_data
+        if get_air_datetime(entry)
     ]
-
 
 
 def get_digest():

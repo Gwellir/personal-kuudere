@@ -35,10 +35,8 @@ class VkScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.request_url = "https://api.vk.com/method/"
-        self.pattern = re.compile(
-            r"https://.*vk.*(wall|photo|video|clip)(-?\d+_\d+).*"
-        )
-        
+        self.pattern = re.compile(r"https://.*vk.*(wall|photo|video|clip)(-?\d+_\d+).*")
+
     def scrape(self, url: str) -> PostData | None:
         post_data = self._vk_scrape(url)
         if post_data:
@@ -61,7 +59,9 @@ class VkScraper(BaseScraper):
                         )
                     elif item["type"] == "video":
                         video_url = item["url"]
-                        logger.info(f"Downloading VK video for: {video_url} to vk_output.mp4...")
+                        logger.info(
+                            f"Downloading VK video for: {video_url} to vk_output.mp4..."
+                        )
                         if os.path.exists(YT_DLP_OPTS["outtmpl"]["default"]):
                             os.remove(YT_DLP_OPTS["outtmpl"]["default"])
                         with yt_dlp.YoutubeDL(YT_DLP_OPTS) as ydl:
@@ -106,9 +106,13 @@ class VkScraper(BaseScraper):
 
         for media in result["media"]:
             if media["type"] == "photo":
-                media["url"] = sorted(media["photo"]["sizes"], key=lambda x: x["width"])[-1]["url"]
+                media["url"] = sorted(
+                    media["photo"]["sizes"], key=lambda x: x["width"]
+                )[-1]["url"]
             elif media["type"] == "video":
-                media["url"] = f'https://vk.com/video{media["video"]["owner_id"]}_{media["video"]["id"]}'
+                media["url"] = (
+                    f'https://vk.com/video{media["video"]["owner_id"]}_{media["video"]["id"]}'
+                )
 
         return result
 
@@ -125,21 +129,23 @@ class VkScraper(BaseScraper):
             return self._get_video_post(post_id)
         else:
             return
-    
+
     def _get_video_post(self, post_id):
         video_post = dict(
             text="Video from VK",
             id=post_id,
             user_id=post_id.split("_")[0],
             name="",
-            media=[dict(
-                url=f"https://vk.com/video{post_id}",
-                type="video",
-            )],
+            media=[
+                dict(
+                    url=f"https://vk.com/video{post_id}",
+                    type="video",
+                )
+            ],
         )
 
         return video_post
-    
+
     @lru_cache()
     def _get_photo_post(self, post_id):
         photo_res = requests.get(
@@ -159,10 +165,14 @@ class VkScraper(BaseScraper):
                 id=photo_obj["id"],
                 user_id=photo_obj["owner_id"],
                 name=user_name if user_name else "",
-                media=[dict(
-                    url=sorted(photo_obj["sizes"], key=lambda x: x["width"])[-1]["url"],
-                    type="photo",
-                )],
+                media=[
+                    dict(
+                        url=sorted(photo_obj["sizes"], key=lambda x: x["width"])[-1][
+                            "url"
+                        ],
+                        type="photo",
+                    )
+                ],
             )
 
             return photo_post

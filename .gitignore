@@ -20,6 +20,7 @@ config.py
 /data/
 
 venv/
+mysql_libs/
 
 *.pickle
 media/

@@ -25,7 +25,9 @@ def retried(func):
                 if (
                     interval := datetime.datetime.now() - LAST_HIT
                 ) < datetime.timedelta(seconds=config.JIKAN_DELAY):
-                    print(f"Waiting out a delay: {config.JIKAN_DELAY - interval.seconds} seconds...")
+                    print(
+                        f"Waiting out a delay: {config.JIKAN_DELAY - interval.seconds} seconds..."
+                    )
                     sleep(config.JIKAN_DELAY - interval.seconds)
                 LAST_HIT = datetime.datetime.now()
             except simplejson.errors.JSONDecodeError:
@@ -38,11 +40,16 @@ def retried(func):
                 ConnectionResetError,
                 http.client.RemoteDisconnected,
             ) as e:
-                if e.args[0] in (404, 504,):
+                if e.args[0] in (
+                    404,
+                    504,
+                ):
                     raise e
                 err_count += 1
                 wait_s = config.JIKAN_DELAY * err_count
-                print(f"API {e} inaccessible x{err_count}: waiting for {wait_s} seconds...")
+                print(
+                    f"API {e} inaccessible x{err_count}: waiting for {wait_s} seconds..."
+                )
                 sleep(wait_s)
                 continue
 
@@ -173,7 +180,9 @@ class JikanCustom:
             self._anime = self._jikan.anime(*args, **kwargs).get("data")
             self._relations = {}
         else:
-            self._relations = self._get_formatted_relations(self._anime.get("relations"))
+            self._relations = self._get_formatted_relations(
+                self._anime.get("relations")
+            )
         self._format_anime()
 
         return self._anime
@@ -189,11 +198,13 @@ class JikanCustom:
             formatted_results = []
             for res in results:
                 self._anime = res
-                self._relations = self._get_formatted_relations(self._anime.get("relations"))
+                self._relations = self._get_formatted_relations(
+                    self._anime.get("relations")
+                )
                 self._format_anime()
                 formatted_results.append(self._anime)
             results = formatted_results
-                
+
         return results
 
     def season(self, page: Optional[int] = None, *args, **kwargs):

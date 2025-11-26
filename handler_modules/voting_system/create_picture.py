@@ -18,29 +18,138 @@ VOTING_NAME = "Осень 2024"
 CHAR_IMAGE_CUT_PART = 0.8
 
 TITLE_TUPLES = (
-    ("MF Ghost 2nd Season", 960, "Sena Moroboshi", "https://cdn.myanimelist.net/images/characters/9/524884.jpg"),
-    ("Nageki no Bourei wa Intai shitai", 939, "Tino Shade",
-     "https://cdn.myanimelist.net/images/characters/14/573244.jpg"),
-    ("Dandadan", 940, "Momo Ayase", "https://cdn.myanimelist.net/images/characters/7/562295.jpg"),
-    ("Dandadan", 941, "Ken Takakura", "https://cdn.myanimelist.net/images/characters/5/531081.jpg"),
-    ("Dandadan", 942, "Aira Shiratori", "https://cdn.myanimelist.net/images/characters/6/554080.jpg"),
-    ("Dandadan", 943, "Rokuro", "https://cdn.myanimelist.net/images/characters/8/531083.jpg"),
-    ("Ao no Hako", 944, "Taiki Inomata", "https://cdn.myanimelist.net/images/characters/7/543178.jpg"),
-    ("Ao no Hako", 945, "Hina Chouno", "https://cdn.myanimelist.net/images/characters/11/574759.jpg"),
-    ("Chi. Chikyuu no Undou ni Tsuite", 946, "Rafal", "https://cdn.myanimelist.net/images/characters/10/564208.jpg"),
-    ("NegaPosi Angler", 947, "Hana Ayukawa", "https://cdn.myanimelist.net/images/characters/7/567572.jpg"),
-    ("NegaPosi Angler", 948, "Debt Collector Boss", "https://cdn.myanimelist.net/images/characters/14/570351.jpg"),
-    ("NegaPosi Angler", 949, "Fujishiro", "https://cdn.myanimelist.net/images/characters/7/559606.jpg"),
-    ("Acro Trip", 950, "Mashirou Mashima", "https://cdn.myanimelist.net/images/characters/4/536724.jpg"),
-    ("Acro Trip", 951, "Chroma Kurozane", "https://cdn.myanimelist.net/images/characters/6/536727.jpg"),
-    ("Acro Trip", 952, "Kuma Kaijin", "https://cdn.myanimelist.net/images/characters/6/560694.jpg"),
-    ("Acro Trip", 953, "Suikyou Date", "https://cdn.myanimelist.net/images/characters/2/560693.jpg"),
-    ("Acro Trip", 954, "Kaju Noichigo", "https://cdn.myanimelist.net/images/characters/9/556694.jpg"),
-    ("Puniru wa Kawaii Slime", 955, "Puniru", "https://cdn.myanimelist.net/images/characters/12/555935.jpg"),
-    ("2.5-jigen no Ririsa", 956, "Masamune Okumura", "https://cdn.myanimelist.net/images/characters/9/563384.jpg"),
-    ("2.5-jigen no Ririsa", 957, "Noa", "https://cdn.myanimelist.net/images/characters/3/547206.jpg"),
-    ("2.5-jigen no Ririsa", 958, "Mayuri Hanyuu", "https://cdn.myanimelist.net/images/characters/3/560709.jpg"),
-    ("2.5-jigen no Ririsa", 959, "Ririsa Amano", "https://cdn.myanimelist.net/images/characters/7/558255.jpg"),
+    (
+        "MF Ghost 2nd Season",
+        960,
+        "Sena Moroboshi",
+        "https://cdn.myanimelist.net/images/characters/9/524884.jpg",
+    ),
+    (
+        "Nageki no Bourei wa Intai shitai",
+        939,
+        "Tino Shade",
+        "https://cdn.myanimelist.net/images/characters/14/573244.jpg",
+    ),
+    (
+        "Dandadan",
+        940,
+        "Momo Ayase",
+        "https://cdn.myanimelist.net/images/characters/7/562295.jpg",
+    ),
+    (
+        "Dandadan",
+        941,
+        "Ken Takakura",
+        "https://cdn.myanimelist.net/images/characters/5/531081.jpg",
+    ),
+    (
+        "Dandadan",
+        942,
+        "Aira Shiratori",
+        "https://cdn.myanimelist.net/images/characters/6/554080.jpg",
+    ),
+    (
+        "Dandadan",
+        943,
+        "Rokuro",
+        "https://cdn.myanimelist.net/images/characters/8/531083.jpg",
+    ),
+    (
+        "Ao no Hako",
+        944,
+        "Taiki Inomata",
+        "https://cdn.myanimelist.net/images/characters/7/543178.jpg",
+    ),
+    (
+        "Ao no Hako",
+        945,
+        "Hina Chouno",
+        "https://cdn.myanimelist.net/images/characters/11/574759.jpg",
+    ),
+    (
+        "Chi. Chikyuu no Undou ni Tsuite",
+        946,
+        "Rafal",
+        "https://cdn.myanimelist.net/images/characters/10/564208.jpg",
+    ),
+    (
+        "NegaPosi Angler",
+        947,
+        "Hana Ayukawa",
+        "https://cdn.myanimelist.net/images/characters/7/567572.jpg",
+    ),
+    (
+        "NegaPosi Angler",
+        948,
+        "Debt Collector Boss",
+        "https://cdn.myanimelist.net/images/characters/14/570351.jpg",
+    ),
+    (
+        "NegaPosi Angler",
+        949,
+        "Fujishiro",
+        "https://cdn.myanimelist.net/images/characters/7/559606.jpg",
+    ),
+    (
+        "Acro Trip",
+        950,
+        "Mashirou Mashima",
+        "https://cdn.myanimelist.net/images/characters/4/536724.jpg",
+    ),
+    (
+        "Acro Trip",
+        951,
+        "Chroma Kurozane",
+        "https://cdn.myanimelist.net/images/characters/6/536727.jpg",
+    ),
+    (
+        "Acro Trip",
+        952,
+        "Kuma Kaijin",
+        "https://cdn.myanimelist.net/images/characters/6/560694.jpg",
+    ),
+    (
+        "Acro Trip",
+        953,
+        "Suikyou Date",
+        "https://cdn.myanimelist.net/images/characters/2/560693.jpg",
+    ),
+    (
+        "Acro Trip",
+        954,
+        "Kaju Noichigo",
+        "https://cdn.myanimelist.net/images/characters/9/556694.jpg",
+    ),
+    (
+        "Puniru wa Kawaii Slime",
+        955,
+        "Puniru",
+        "https://cdn.myanimelist.net/images/characters/12/555935.jpg",
+    ),
+    (
+        "2.5-jigen no Ririsa",
+        956,
+        "Masamune Okumura",
+        "https://cdn.myanimelist.net/images/characters/9/563384.jpg",
+    ),
+    (
+        "2.5-jigen no Ririsa",
+        957,
+        "Noa",
+        "https://cdn.myanimelist.net/images/characters/3/547206.jpg",
+    ),
+    (
+        "2.5-jigen no Ririsa",
+        958,
+        "Mayuri Hanyuu",
+        "https://cdn.myanimelist.net/images/characters/3/560709.jpg",
+    ),
+    (
+        "2.5-jigen no Ririsa",
+        959,
+        "Ririsa Amano",
+        "https://cdn.myanimelist.net/images/characters/7/558255.jpg",
+    ),
 )
 
 FONT_BASIC = "arial.ttf"
@@ -87,7 +196,7 @@ def create_text_image(
     anchor: str = "mm",
     font: str = FONT_BASIC,
     fill_color: tuple[int, int, int, int] | str = "black",
-    multiline = False,
+    multiline=False,
 ):
     with Image.new("RGB", size, "white") as image:
         draw = ImageDraw.Draw(image)
@@ -104,11 +213,15 @@ def create_text_image(
         else:
             content = text
 
-
         draw_func = draw.multiline_text if multiline else draw.text
-        draw_func((image.size[0] // 2, image.size[1] // 2), content, fill_color,
-                  align=align, font=font, anchor=anchor,
-                  )
+        draw_func(
+            (image.size[0] // 2, image.size[1] // 2),
+            content,
+            fill_color,
+            align=align,
+            font=font,
+            anchor=anchor,
+        )
         # image.show()
     return image
 
@@ -155,7 +268,10 @@ def merge_images(
     iter_position = iterate_margin
     for img in images:
         if direction == "v":
-            box = (max_size // 2 - img.size[1 - iterate_by] // 2 + wrap_margin, iter_position)
+            box = (
+                max_size // 2 - img.size[1 - iterate_by] // 2 + wrap_margin,
+                iter_position,
+            )
         else:
             box = (iter_position, wrap_margin)
         collated.paste(img, box=box)
@@ -163,7 +279,9 @@ def merge_images(
 
     if border:
         draw = ImageDraw.Draw(collated)
-        draw.rectangle((0, 0, collated.size[0] - 1, collated.size[1] - 1), outline=border, width=2)
+        draw.rectangle(
+            (0, 0, collated.size[0] - 1, collated.size[1] - 1), outline=border, width=2
+        )
 
     return collated
 
@@ -173,8 +291,13 @@ def make_char_cards_for_title(title_data: list[tuple[int, str, str]]):
     for img_data in title_data:
         char_id, char_name, img_url = img_data
         name_image = create_text_image(
-            char_name, font=FONT_BASIC, anchor="mm", size=(AVATAR_H_SIZE, CHAR_NAMEPLATE_HEIGHT),
-            font_size=FONT_CHAR_SIZE, fill_color=(0, 0, 0, 255), multiline=True,
+            char_name,
+            font=FONT_BASIC,
+            anchor="mm",
+            size=(AVATAR_H_SIZE, CHAR_NAMEPLATE_HEIGHT),
+            font_size=FONT_CHAR_SIZE,
+            fill_color=(0, 0, 0, 255),
+            multiline=True,
         )
         img = Image.open(get_resource_cached(img_url))
         img = img.resize(
@@ -205,15 +328,23 @@ class CharacterCard:
 
     def _generate_name_image(self):
         self.text_image = create_text_image(
-            self.name, font=FONT_BASIC, anchor="mm", size=(AVATAR_H_SIZE, CHAR_NAMEPLATE_HEIGHT),
-            font_size=FONT_CHAR_SIZE, fill_color="black", multiline=True,
+            self.name,
+            font=FONT_BASIC,
+            anchor="mm",
+            size=(AVATAR_H_SIZE, CHAR_NAMEPLATE_HEIGHT),
+            font_size=FONT_CHAR_SIZE,
+            fill_color="black",
+            multiline=True,
         )
         return self.text_image
 
     def _generate_char_image(self):
         img = Image.open(get_resource_cached(self.img_url))
         self.char_image = img.resize(
-            (AVATAR_H_SIZE, int(img.size[1] * CHAR_IMAGE_CUT_PART * AVATAR_H_SIZE / img.size[0])),
+            (
+                AVATAR_H_SIZE,
+                int(img.size[1] * CHAR_IMAGE_CUT_PART * AVATAR_H_SIZE / img.size[0]),
+            ),
             box=(0, 0, img.size[0], img.size[1] * CHAR_IMAGE_CUT_PART),
         )
         return self.char_image
@@ -235,7 +366,12 @@ class TitleCard:
         self.characters: list[CharacterCard] = []
         self.width_stackable: bool = False if self._get_width_in_cards() > 4 else True
         self.height_in_cards: int = math.ceil(len(self.char_data) / CARD_H_AMOUNT)
-        print(self.title, self.title_width, self._get_width_in_cards(), self.width_stackable)
+        print(
+            self.title,
+            self.title_width,
+            self._get_width_in_cards(),
+            self.width_stackable,
+        )
 
     def _get_title_width(self):
         font = ImageFont.truetype(FONT_BASIC, FONT_TITLE_SIZE)
@@ -243,11 +379,19 @@ class TitleCard:
         return round(font.getlength(self.title))
 
     def _get_width_in_cards(self):
-        return max(len(self.char_data), math.ceil(self._get_title_width() / (AVATAR_H_SIZE + MARGIN_HORIZONTAL)))
+        return max(
+            len(self.char_data),
+            math.ceil(self._get_title_width() / (AVATAR_H_SIZE + MARGIN_HORIZONTAL)),
+        )
 
     def _generate_header_image(self):
         # calculate title width via PIL text size
-        self.header_image = create_text_image(self.title, font=FONT_BASIC, font_size=FONT_TITLE_SIZE, fill_color=TITLE_HEADER_COLOR)
+        self.header_image = create_text_image(
+            self.title,
+            font=FONT_BASIC,
+            font_size=FONT_TITLE_SIZE,
+            fill_color=TITLE_HEADER_COLOR,
+        )
 
         return self.header_image
 
@@ -257,12 +401,17 @@ class TitleCard:
 
         rows = []
         for i in range(0, len(character_cards), CARD_H_AMOUNT):
-            char_cards_chunk = character_cards[i:i + CARD_H_AMOUNT]
+            char_cards_chunk = character_cards[i : i + CARD_H_AMOUNT]
             rows.append(merge_images(char_cards_chunk, "h", margins=(0, 0)))
 
         character_cards_image = merge_images(rows, "v", margins=(0, 0))
 
-        self.title_image = merge_images([header_image, character_cards_image], "v", margins=(0, 0), border=(255, 255, 255, 255))
+        self.title_image = merge_images(
+            [header_image, character_cards_image],
+            "v",
+            margins=(0, 0),
+            border=(255, 255, 255, 255),
+        )
 
         return self.title_image
 
@@ -272,7 +421,7 @@ class VotingCard:
         self,
         season_name: str,
         season_id: str,
-        title_data: list[tuple[str, int, str, str]]
+        title_data: list[tuple[str, int, str, str]],
     ):
         self.season_name = season_name
         self.season_id = season_id
@@ -292,7 +441,6 @@ class VotingCard:
 
         for title in titles.keys():
             self.titles.append(TitleCard(title, titles[title]))
-
 
         column_size = math.ceil(len(titles.keys()) / COLUMN_COUNT)
 
@@ -315,7 +463,8 @@ def make_collage(title_tuples: list[tuple[str, int, str, str]], season_name: str
                 "source": title_tuple[0],
                 "selected": False,
                 "img": f"/img/{title_tuple[1]}.jpg",
-            } for title_tuple in title_tuples
+            }
+            for title_tuple in title_tuples
         ],
         "title": season_name,
     }
@@ -328,18 +477,28 @@ def make_collage(title_tuples: list[tuple[str, int, str, str]], season_name: str
 
     title_cards = []
     for title in titles.keys():
-        header_image = create_text_image(title, font=FONT_BASIC, font_size=FONT_TITLE_SIZE, fill_color=TITLE_HEADER_COLOR)
+        header_image = create_text_image(
+            title,
+            font=FONT_BASIC,
+            font_size=FONT_TITLE_SIZE,
+            fill_color=TITLE_HEADER_COLOR,
+        )
 
         character_cards = make_char_cards_for_title(titles[title])
 
         rows = []
         for i in range(0, len(character_cards), CARD_H_AMOUNT):
-            char_cards_chunk = character_cards[i:i + CARD_H_AMOUNT]
+            char_cards_chunk = character_cards[i : i + CARD_H_AMOUNT]
             rows.append(merge_images(char_cards_chunk, "h", margins=(0, 0)))
 
         character_cards_image = merge_images(rows, "v", margins=(0, 0))
 
-        title_card = merge_images([header_image, character_cards_image], "v", margins=(0, 0), border=(255, 255, 255, 255))
+        title_card = merge_images(
+            [header_image, character_cards_image],
+            "v",
+            margins=(0, 0),
+            border=(255, 255, 255, 255),
+        )
         title_cards.append(title_card)
         total_height += title_card.size[1]
 
@@ -357,8 +516,14 @@ def make_collage(title_tuples: list[tuple[str, int, str, str]], season_name: str
     columns_images = [merge_images(column, "v") for column in columns]
     cards = merge_images(columns_images, "h", margins=(0, 0))
 
-    voting_header = create_text_image(season_name, size=(cards.size[0], 80), font_size=FONT_HEADER_SIZE, font=FONT_HEADER,
-                                      fill_color=VOTING_HEADER_COLOR, anchor="mm")
+    voting_header = create_text_image(
+        season_name,
+        size=(cards.size[0], 80),
+        font_size=FONT_HEADER_SIZE,
+        font=FONT_HEADER,
+        fill_color=VOTING_HEADER_COLOR,
+        anchor="mm",
+    )
     collage = merge_images([voting_header, cards], "v")
     print(collage.size)
 
@@ -368,4 +533,3 @@ def make_collage(title_tuples: list[tuple[str, int, str, str]], season_name: str
     byte_image.seek(0)
     # collage.save("img/collage.png")
     return byte_image
-
