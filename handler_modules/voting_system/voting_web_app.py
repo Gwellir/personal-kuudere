@@ -1,4 +1,5 @@
 import json
+import logging
 import urllib.parse
 from datetime import datetime
 
@@ -20,6 +21,8 @@ from handler_modules.voting_system.exceptions import (
     InvalidVotesError,
 )
 from handler_modules.voting_system.system import VotingSystem
+
+logger = logging.getLogger("handler.voting_web_app")
 
 
 class Vote(Handler):
@@ -66,7 +69,7 @@ class VotingWebApp(Handler):
 
         else:
             data = json.loads(update.effective_message.web_app_data.data)
-            print(update.effective_user.id, update.effective_user.username, data)
+            logger.info(f"{update.effective_user.id} ({update.effective_user.username}): {data}")
             stage = data.get("stage")
             boolean_data = [bool(int(char)) for char in data.get("votes")]
             if stage != vs.stage:

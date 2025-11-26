@@ -261,6 +261,10 @@ class JikanCustom:
                 f"{base_url}/{username}/{request}",
                 headers={"X-MAL-CLIENT-ID": token},
                 params=params,
+                proxies={
+                    "https": config.proxy_auth_url,
+                    "http": config.proxy_auth_url,
+                },
             ).json()
 
         base_url = "https://api.myanimelist.net/v2/users"
