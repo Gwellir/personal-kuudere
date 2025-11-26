@@ -42,6 +42,7 @@ if __name__ == "__main__":
         token=config.token,
         base_url="http://localhost:8081/bot",
         use_context=True,
+        # local_mode=True,
         # persistence=PicklePersistence("persist.pickle", store_user_data=False, store_chat_data=False, )
     )
     dispatcher: Dispatcher = updater.dispatcher

@@ -318,10 +318,11 @@ class TorrentFeedParser:
             #         and (result["episodes"] == 0 or result["episodes"] >= a_ep_no)
             # )
         ]
-        
-        
+
         if search_results and len(search_results) > 1:
-            FEEDPARSER_LOG.warning(f"Failed to resolve '{a_title}' precisely: {mal_ids}")
+            FEEDPARSER_LOG.warning(
+                f"Failed to resolve '{a_title}' precisely: {mal_ids}"
+            )
             mal_id = get_closest_match_aid(search_results, query.lower())
         elif search_results:
             mal_id = mal_ids[0]

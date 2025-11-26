@@ -31,10 +31,21 @@ class ShowCandidates(Handler):
             .join(SeasonalVotings)
             .join(Anime)
             .filter(SeasonalVotings.is_current == True)
-            .with_entities(VotedCharacters.mal_cid, VotedCharacters.name, VotedCharacters.image_url, VotedCharacters.id, Anime.title)
+            .with_entities(
+                VotedCharacters.mal_cid,
+                VotedCharacters.name,
+                VotedCharacters.image_url,
+                VotedCharacters.id,
+                Anime.title,
+            )
             .all()
         )
-        season_id = sess.query(SeasonalVotings).filter(SeasonalVotings.is_current == True).first().season
+        season_id = (
+            sess.query(SeasonalVotings)
+            .filter(SeasonalVotings.is_current == True)
+            .first()
+            .season
+        )
         season_name = f"{SEASON_NAMES[season_id.split()[0]]} {season_id.split()[1]}"
         logger.debug("Candidates: %s", entries)
         allowed_entries = defaultdict(list)
@@ -43,22 +54,19 @@ class ShowCandidates(Handler):
         voting_data = []
 
         for char in entries:
-            allowed_entries[char[4]].append(
-                (char[0], char[1], char[2])
-            )
+            allowed_entries[char[4]].append((char[0], char[1], char[2]))
             title_tuples.append((char[4], char[3], char[1], char[2]))
-            voting_data.append({
-                "name": char[1],
-                "source": char[4],
-                "selected": False,
-                "img": f"/img/{char[3]}.jpg"
-            })
+            voting_data.append(
+                {
+                    "name": char[1],
+                    "source": char[4],
+                    "selected": False,
+                    "img": f"/img/{char[3]}.jpg",
+                }
+            )
 
         image = make_collage(title_tuples, season_name)
-        full_data = {
-            "candidates": voting_data,
-            "title": season_name
-        }
+        full_data = {"candidates": voting_data, "title": season_name}
         return waifu_counter, image, allowed_entries, full_data
 
     def answer(self, result):
@@ -84,7 +92,7 @@ class ShowCandidates(Handler):
             photo=image,
             chat_id=self.chat.id,
         )
-        json_data = json.dumps(raw_data) 
+        json_data = json.dumps(raw_data)
         while json_data:
             to_send, json_data = json_data[:4000], json_data[4000:]
             self.bot.send_message(

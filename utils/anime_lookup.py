@@ -30,10 +30,18 @@ class AnimeLookup:
             if local_result
             else None
         )
-        if (not local_result or not local_result.popularity or forced
-            or (not cached and datetime.now() - local_result.synced > timedelta(days=14))):
+        if (
+            not local_result
+            or not local_result.popularity
+            or forced
+            or (
+                not cached and datetime.now() - local_result.synced > timedelta(days=14)
+            )
+        ):
             try:
-                ANIMEBASE_LOG.debug(f"Updating anime info for id: {mal_aid}, cached={cached}, forced={forced}")
+                ANIMEBASE_LOG.debug(
+                    f"Updating anime info for id: {mal_aid}, cached={cached}, forced={forced}"
+                )
                 output = self._jikan.anime(mal_aid)
             except jikanpy.exceptions.APIException:
                 ANIMEBASE_LOG.warning(f"Not found: {mal_aid}")

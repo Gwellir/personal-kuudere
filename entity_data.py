@@ -91,8 +91,13 @@ class AnimeEntry(
             self.aired["to"][:10] if self.aired["to"] else "...",
             self.score if self.score else "-",
             self.image_url,
-            (self.synopsis[:500] + (" &lt;...&gt;" if len(self.synopsis) > 500 else ""))
-            if self.synopsis
-            else "[No synopsis available.]",
+            (
+                (
+                    self.synopsis[:500]
+                    + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                )
+                if self.synopsis
+                else "[No synopsis available.]"
+            ),
             self.url,
         )

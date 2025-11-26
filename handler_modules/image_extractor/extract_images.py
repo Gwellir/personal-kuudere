@@ -183,7 +183,9 @@ class TwitterExtractor(Handler):
             idx = 0
             tries = 0
             while not complete and tries < 10:
-                logger.info(f"Sending media group... {media_group}, {media_group[0].media}")
+                logger.info(
+                    f"Sending media group... {media_group}, {media_group[0].media}"
+                )
                 try:
                     self.chat.send_media_group(
                         media=media_group,
@@ -193,7 +195,9 @@ class TwitterExtractor(Handler):
                     complete = True
                 except (BadRequest, NetworkError) as exc:
                     logger.warning(exc.message)
-                    if exc.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
+                    if exc.message.startswith(
+                        "urllib3 HTTPError The operation did not complete (write)"
+                    ):
                         logger.debug("Retrying...")
                         tries += 1
                         continue
@@ -206,7 +210,11 @@ class TwitterExtractor(Handler):
                     ):
                         media_group[idx] = load_media_video_from_url(
                             media_group[idx].media,
-                            media_group[idx].caption if hasattr(media_group[idx], "caption") else None,
+                            (
+                                media_group[idx].caption
+                                if hasattr(media_group[idx], "caption")
+                                else None
+                            ),
                         )
                         idx += 1
                     else:

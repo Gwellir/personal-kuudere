@@ -133,11 +133,13 @@ class Anime(Base):
                 self.ended_at.date() if self.ended_at else "...",
                 self.score,
                 (
-                    self.synopsis[:500]
-                    + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
-                )
-                if self.synopsis
-                else "[No synopsis available.]",
+                    (
+                        self.synopsis[:500]
+                        + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                    )
+                    if self.synopsis
+                    else "[No synopsis available.]"
+                ),
             )
         )
 

@@ -23,7 +23,18 @@ class PostMedia(BaseModel):
     downloaded: bytes | None = None
 
     def __repr_args__(self) -> _repr.ReprArgs:
-        return ("url", self.url), ("type", str(self.type)), ("downloaded", self.downloaded if not self.downloaded else f"{len(self.downloaded)} bytes")
+        return (
+            ("url", self.url),
+            ("type", str(self.type)),
+            (
+                "downloaded",
+                (
+                    self.downloaded
+                    if not self.downloaded
+                    else f"{len(self.downloaded)} bytes"
+                ),
+            ),
+        )
 
 
 class PostData(BaseModel):
@@ -35,12 +46,14 @@ class PostData(BaseModel):
     qrt: PostData | None = None
 
     def get_caption(self, original: str, author: str):
-        prefix = (
-            'Медиа из {qrt}<a href="{url}">поста</a> {name}\n'.format(
-                url=self.url,
-                name=self.name,
-                qrt="QRT " if self.qrt and self.attached_media == self.qrt.attached_media else "",
-            )
+        prefix = 'Медиа из {qrt}<a href="{url}">поста</a> {name}\n'.format(
+            url=self.url,
+            name=self.name,
+            qrt=(
+                "QRT "
+                if self.qrt and self.attached_media == self.qrt.attached_media
+                else ""
+            ),
         )
         prefix += '<a href="{original}">&gt; сообщение от {author} &lt;</a>'.format(
             original=original,
@@ -70,7 +83,7 @@ class PostData(BaseModel):
                 text = full_text
         else:
             text = main_text
-        
+
         caption = "{prefix}\n\n{text}".format(
             prefix=prefix,
             text=text,

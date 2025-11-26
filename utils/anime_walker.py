@@ -34,11 +34,9 @@ def get_anime_by_ids(ls_ids):
 
 anime_ids = [
     e[0]
-    for e in base.get_session()
-    .query(Anime.mal_aid)
-    #.filter(Anime.status == "Not Yet Aired")
-    .filter(Anime.synced < datetime.now() - timedelta(days=14))
-    .all()
+    for e in base.get_session().query(Anime.mal_aid)
+    # .filter(Anime.status == "Not Yet Aired")
+    .filter(Anime.synced < datetime.now() - timedelta(days=14)).all()
 ]
 
 range_60000 = [i for i in range(1, 60000)]
