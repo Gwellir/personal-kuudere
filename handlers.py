@@ -1,4 +1,5 @@
 import inspect
+import logging
 import os
 import re
 import sys
@@ -43,8 +44,9 @@ from handler_modules.voting_system.voting_upload import VotingUpload
 from handler_modules.voting_system.nominate import Nominate
 from utils.expiring_set import ExpiringSet
 
-# todo inline keyboard builder shouldn't be here
+logger = logging.getLogger("_handlers")
 
+# todo inline keyboard builder shouldn't be here
 
 def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
     menu = [buttons[i : i + n_cols] for i in range(0, len(buttons), n_cols)]
@@ -680,6 +682,9 @@ class HandlersStructure:
     # todo integrate mal search
     # todo add buttons for alt titles
     def users_seen_anime(self, update, context):
+        logger.debug(str(update))
+        if getattr(update, 'edited_message'):
+            return
         q = " ".join(context.args)
         status_dict = {1: "ong", 2: "done", 3: "hold", 4: "drop", 6: "PTW"}
         titles = None
