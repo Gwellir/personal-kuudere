@@ -24,7 +24,7 @@ class TwitterScraper(BaseScraper):
         if post_data:
             converted_data = self._convert(post_data)
             logger.debug(f"converted to common format: {converted_data}")
-            if post_data["qrtURL"] is not None:
+            if (post_data["qrtURL"] is not None) and (post_data["qrt"] is not None):
                 qrt_data = self._convert(post_data["qrt"])
                 logger.debug(f"got QRT data: {qrt_data}")
                 converted_data["qrt"] = qrt_data

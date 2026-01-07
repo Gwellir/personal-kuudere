@@ -20,7 +20,7 @@ YT_DLP_OPTS = {
     'compat_opts': {'manifest-filesize-approx'},
     'cookies_from_browser': 'firefox',
     'extract_flat': 'discard_in_playlist',
-    'format': '(bv*[protocol*=m3u8]+ba/b[protocol*=m3u8])[filesize_approx<45M]',
+    'format': '(bv*[protocol*=m3u8]+ba/b[protocol*=m3u8])[filesize_approx<500M]',
     'fragment_retries': 10,
     'ignoreerrors': 'only_download',
     'merge_output_format': 'mp4',
