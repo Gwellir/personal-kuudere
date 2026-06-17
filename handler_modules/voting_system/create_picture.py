@@ -11,6 +11,8 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from requests import Response
 
+import config
+
 logger = logging.getLogger("handler.create_picture")
 
 VOTING_NAME = "Осень 2024"
@@ -158,6 +160,9 @@ FONT_HEADER_SIZE = 50
 FONT_TITLE_SIZE = 20
 FONT_CHAR_SIZE = 14
 
+FULL_AVATAR_H_SIZE = 225
+FULL_AVATAR_V_SIZE = 280
+
 AVATAR_H_SIZE = 86
 CHAR_NAMEPLATE_HEIGHT = 48
 TITLE_NAMEPLATE_HEIGHT = 40
@@ -178,7 +183,14 @@ def get_resource_cached(url: str):
         open(name, "rb")
 
     except FileNotFoundError:
-        content: Response = requests.get(url, stream=True)
+        content: Response = requests.get(
+            url,
+            proxies={
+                "https": config.proxy_auth_url,
+                "http": config.proxy_auth_url,
+            },
+            stream=True,
+        )
         sleep(0.5)
 
         with open("cache/" + url.split("/")[-1], "wb") as f:
@@ -286,7 +298,7 @@ def merge_images(
     return collated
 
 
-def make_char_cards_for_title(title_data: list[tuple[int, str, str]]):
+def make_char_cards_for_title(title_data: list[tuple[int, str, str]], pad_color = (255, 255, 255)):
     char_cards = []
     for img_data in title_data:
         char_id, char_name, img_url = img_data
@@ -299,15 +311,19 @@ def make_char_cards_for_title(title_data: list[tuple[int, str, str]]):
             fill_color=(0, 0, 0, 255),
             multiline=True,
         )
-        img = Image.open(get_resource_cached(img_url))
-        img = img.resize(
-            (225, int(img.size[1] * CHAR_IMAGE_CUT_PART * 225 / img.size[0])),
-            box=(0, 0, img.size[0], img.size[1] * CHAR_IMAGE_CUT_PART),
+        
+        cached_img = Image.open(get_resource_cached(img_url))
+        new_height = int(cached_img.size[1] * FULL_AVATAR_H_SIZE / cached_img.size[0])
+        cached_img = cached_img.resize(
+            (FULL_AVATAR_H_SIZE, new_height), Image.Resampling.LANCZOS
         )
-        img.save(f"img/{char_id}.jpg")
+        cached_img = cached_img.convert('RGB')
+        cached_img.save(f"img/{char_id}.jpg")
+        img = Image.new("RGB", (FULL_AVATAR_H_SIZE, FULL_AVATAR_V_SIZE), pad_color)
+        img.paste(cached_img, (0, (FULL_AVATAR_V_SIZE - new_height) // 2))
+        
         img = img.resize(
             (AVATAR_H_SIZE, int(img.size[1] * AVATAR_H_SIZE / img.size[0])),
-            box=(0, 0, img.size[0], img.size[1]),
         )
 
         char_card = merge_images([img, name_image], "v")

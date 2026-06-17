@@ -27,7 +27,9 @@ proxy_username = os.getenv("PROXY_USERNAME")
 proxy_password = os.getenv("PROXY_PASSWORD")
 proxy_schema = os.getenv("PROXY_SCHEMA")
 proxy_auth_url = f"{proxy_schema}://{proxy_username}:{proxy_password}@{proxy_address}"
+
 proxy_url = f"{proxy_schema}://{proxy_address}"
+#proxy_auth_url = proxy_url
 
 
 vk_token = os.getenv("VK_TOKEN")

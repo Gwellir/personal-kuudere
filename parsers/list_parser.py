@@ -184,7 +184,12 @@ class ListImporter:
                 }
                 try:
                     response = requests.post(
-                        AL_URL, json={"query": AL_LIST_QUERY, "variables": variables}
+                        AL_URL,
+                        json={"query": AL_LIST_QUERY, "variables": variables},
+                        proxies={
+                            "https": config.proxy_auth_url,
+                            "http": config.proxy_auth_url,
+                        },
                     )
                     answer = response.json()
                     if response.status_code == 200:
@@ -246,6 +251,8 @@ class ListImporter:
             userlist_mal = [(nick, None)]
         for user_entry in userlist_mal:
             user = self.jikan.user(username=user_entry[0], request="full")
+            if not user:
+                continue
             print(user["username"], "-> got profile data")
             if not user_entry[1]:
                 self.di.update_users_service_id_for_service_nick(
@@ -432,8 +439,8 @@ class ListImporter:
 if __name__ == "__main__":
     li = ListImporter(None, None, None, None, autistic=True)
     # li.update_ani_list_status("u3m")
-    # li.update_mal_list_status("DarkElve")
-    li.update_all()
+    li.update_mal_list_status("Rioter")
+    #li.update_all()
 
     # li.get_anime_season_mal()
     # li.update_seasonal()

@@ -223,7 +223,10 @@ class TorrentFeedParser:
 
         :return:
         """
-        rss_ans = requests.get(rss_feed, proxies={"https": config.proxy_auth_url})
+        rss_ans = requests.get(
+            rss_feed,
+        #    proxies={"https": config.proxy_auth_url}
+        )
         if not rss_ans.status_code == HTTPStatus.OK:
             FEEDPARSER_LOG.error(
                 f"Failed to get feed '{rss_feed}': {rss_ans.status_code}"
@@ -415,17 +418,20 @@ class TorrentFeedParser:
         approved_ep = self.di.select_last_ongoing_ep_by_id(mal_id, session).one()
         if approved_ep and int(episode) > approved_ep[0]:
             FEEDPARSER_LOG.info(f"  >>> FAKE {title} - {episode} by {group}")
-            return
+            # return
         is_downloaded = False
         title = re.sub(r"[|/\\?:<>\"]", " ", title)
-        r = requests.get(link, proxies={"https": config.proxy_auth_url})
-        filename = (
-            f"torrents/[{group}] {title}({mal_id}) - {episode:0>2}"
-            + (f" [{res}p]" if res else "")
-            + f" [{size} MiB].torrent"
+        r = requests.get(
+            link,
+#            proxies={"https": config.proxy_auth_url}
         )
-        f = open(filename, "wb")
-        if f:
+        if r.status_code == 200:
+            filename = (
+                f"torrents/[{group}] {title}({mal_id}) - {episode:0>2}"
+                + (f" [{res}p]" if res else "")
+                + f" [{size} MiB].torrent"
+            )
+            f = open(filename, "wb")
             f.write(r.content)
             is_downloaded = True
             f.close()

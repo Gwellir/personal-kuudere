@@ -195,28 +195,33 @@ class TwitterExtractor(Handler):
                     complete = True
                 except (BadRequest, NetworkError) as exc:
                     logger.warning(exc.message)
+                    tries += 1
+                    logger.debug(f"Failed... try #{tries}")
+
                     if exc.message.startswith(
                         "urllib3 HTTPError The operation did not complete (write)"
                     ):
-                        logger.debug("Retrying...")
-                        tries += 1
                         continue
                     elif (
                         exc.message in (
                             'Failed to send message #1 with the error message "wrong file identifier/http url specified"',
                             'Failed to send message #1 with the error message "webpage_media_empty"',
                             'Failed to send message #1 with the error message "webpage_curl_failed"',
+                            'Timed out',
                         )
                     ):
-                        media_group[idx] = load_media_video_from_url(
-                            media_group[idx].media,
-                            (
-                                media_group[idx].caption
-                                if hasattr(media_group[idx], "caption")
-                                else None
-                            ),
-                        )
-                        idx += 1
+                        if isinstance(media_group[idx].media, str):
+                            media_group[idx] = load_media_video_from_url(
+                                media_group[idx].media,
+                                (
+                                    media_group[idx].caption
+                                    if hasattr(media_group[idx], "caption")
+                                    else None
+                                ),
+                            )
+                            # idx += 1
+                        else:
+                            complete = True
                     else:
                         logger.error(f"Failed to send media group: {exc.message}")
                         complete = True

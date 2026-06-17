@@ -10,6 +10,7 @@ from strip_tags import strip_tags
 
 logger = logging.getLogger("handler.extract_images.models")
 
+MAX_LENGTH = 1024
 
 class MediaType(Enum):
     IMAGE = "image"
@@ -63,7 +64,7 @@ class PostData(BaseModel):
         main_text = strip_tags(self.text).replace("<", "&lt;").replace(">", "&gt;")
         # or shorten the text from vk if it's too long
         if len(main_text) >= (
-            remainder_len := 1024 - len(strip_tags(prefix))
+            remainder_len := MAX_LENGTH - len(strip_tags(prefix))
         ):
             main_text = main_text[: remainder_len - 8] + " &lt;...&gt;"
 
@@ -73,9 +74,9 @@ class PostData(BaseModel):
             qrt_text = self.qrt.text
             full_text += (f"{qrt_prefix}{qrt_text}")
             if len(full_text) >= (
-                remainder_len := 1024 - len(strip_tags(qrt_prefix)) - len(strip_tags(prefix))
+                remainder_len := MAX_LENGTH - len(strip_tags(qrt_prefix)) - len(strip_tags(prefix))
             ):
-                remainder_len = 400
+                remainder_len = MAX_LENGTH // 2
                 main_text = main_text[:remainder_len] + " &lt;...&gt;"
                 qrt_text = qrt_text[:remainder_len] + " &lt;...&gt;"
                 text = f"{main_text}{qrt_prefix}{qrt_text}"
