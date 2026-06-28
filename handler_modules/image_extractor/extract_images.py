@@ -77,6 +77,14 @@ def load_media_video_from_url(url: str, caption: str | None) -> InputMediaVideo:
 
     return result_media
 
+def form_rich_html_from_post(post: PostData, caption: str) -> str:
+    media_html = "".join([f'<img src="{media.url}"/>' for media in post.attached_media])
+    if len(post.attached_media) > 1:
+        # tg-collage with a single item breaks on iphones
+        media_html = f"<tg-collage>{media_html}</tg-collage>"
+    caption = caption.replace('\n', '<br>')
+    return f"{media_html}{caption}"
+
 
 class TwitterExtractor(Handler):
     hosts = {
@@ -151,10 +159,15 @@ class TwitterExtractor(Handler):
     @staticmethod
     def _form_media_group(item: PostData, caption):
         media_group = []
+        has_video = False
         for i, media in enumerate(item.attached_media):
             wrapper = (
                 InputMediaPhoto if media.type == MediaType.IMAGE else InputMediaVideo
             )
+            
+            if media.type != MediaType.IMAGE:
+                has_video = True
+            
             media_group.append(
                 wrapper(
                     media.url if not media.downloaded else get_bytes(media.downloaded),
@@ -164,7 +177,7 @@ class TwitterExtractor(Handler):
                 )
             )
 
-        return media_group
+        return media_group, has_video
 
     def answer(self, result: list[PostData]):
         for num, item in enumerate(result):
@@ -178,20 +191,40 @@ class TwitterExtractor(Handler):
 
             logger.debug(f"Caption length: {len(caption)}")
 
-            media_group = self._form_media_group(item, caption)
+            media_group, group_has_video = self._form_media_group(item, caption)
             complete = False
-            idx = 0
             tries = 0
             while not complete and tries < 10:
                 logger.info(
-                    f"Sending media group... {media_group}, {media_group[0].media}"
+                    f"Sending media group... {media_group}, {[(media.caption if hasattr(media, 'caption') else '---', media.media, media.parse_mode) for media in media_group]}"
                 )
                 try:
+                    # if group_has_video:
                     self.chat.send_media_group(
                         media=media_group,
                         disable_notification=True,
                         api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
                     )
+
+                    # else:
+                        # caption_long = item.get_caption(
+                            # original=self.message.link,
+                            # author=self.user.full_name,
+                            # length_limit=8000,
+                        # )
+                        # logger.info(form_rich_html_from_post(item, caption_long))
+                        # r = requests.post(
+                            # f"https://api.telegram.org/bot{config.token}/sendRichMessage",
+                            # json={
+                                # "chat_id": self.chat.id,
+                                # "rich_message": {
+                                    # "html": form_rich_html_from_post(item, caption_long),
+                                # }
+                            # },
+                            # timeout=60,
+                        # )
+                        # r.raise_for_status()
+                    
                     complete = True
                 except (BadRequest, NetworkError) as exc:
                     logger.warning(exc.message)
@@ -208,20 +241,20 @@ class TwitterExtractor(Handler):
                             'Failed to send message #1 with the error message "webpage_media_empty"',
                             'Failed to send message #1 with the error message "webpage_curl_failed"',
                             'Timed out',
-                        )
+                        ) or exc.message.startswith("Can't parse inputmedia: can't parse entities")
                     ):
-                        if isinstance(media_group[idx].media, str):
-                            media_group[idx] = load_media_video_from_url(
-                                media_group[idx].media,
-                                (
-                                    media_group[idx].caption
-                                    if hasattr(media_group[idx], "caption")
-                                    else None
-                                ),
-                            )
-                            # idx += 1
-                        else:
-                            complete = True
+                        complete = True
+                        for i, media_item in enumerate(media_group):
+                            if isinstance(media_item.media, str) and isinstance(media_item, InputMediaVideo):
+                                media_group[i] = load_media_video_from_url(
+                                    media_item.media,
+                                    (
+                                        media_item.caption
+                                        if hasattr(media_item, "caption")
+                                        else None
+                                    ),
+                                )
+                                complete = False
                     else:
                         logger.error(f"Failed to send media group: {exc.message}")
                         complete = True

@@ -38,13 +38,17 @@ if __name__ == "__main__":
 
         return filters
 
-    #request = Request(proxy_url=config.proxy_auth_url)
     # telegram.ext initialization
     updater: Updater = Updater(
         token=config.token,
-        #base_url="http://localhost:8081/bot",
+        base_url="http://localhost:8081/bot",
+        base_file_url='http://127.0.0.1:8081/file/bot',
         use_context=True,
-        # local_mode=True,
+        request_kwargs={
+            'connect_timeout': 30,
+            'read_timeout': 300,
+        },
+        #local_mode=True,
         # persistence=PicklePersistence("persist.pickle", store_user_data=False, store_chat_data=False, )
     )
     dispatcher: Dispatcher = updater.dispatcher

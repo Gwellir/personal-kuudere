@@ -1,5 +1,7 @@
+import json 
 import logging
 import re
+import subprocess
 from functools import lru_cache
 from http import HTTPStatus
 from time import sleep
@@ -7,12 +9,91 @@ from typing import Optional
 
 import jmespath
 import requests
+from yt_dlp import YoutubeDL
 
 import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
 from handler_modules.image_extractor.models import PostData
 
 logger = logging.getLogger("handler.x_scraper")
+
+MAX_SIZE_MB = 20
+MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
+
+def get_content_length(url, timeout=10):
+    try:
+        r = requests.head(
+            url,
+            allow_redirects=True,
+            timeout=timeout,
+            proxies={
+                "https": config.proxy_auth_url,
+                "http": config.proxy_auth_url,
+            },
+        )
+        size = r.headers.get("Content-Length")
+        return int(size) if size else None
+    except Exception:
+        return None
+
+def pick_adequate_video_size(info: dict, max_bytes: int = MAX_SIZE_BYTES):
+    formats = info.get("formats", [])
+    formats.sort(key=lambda x: x["tbr"], reverse=True)
+    candidates = []
+
+    for f in formats:
+        if not f.get("format_id", "").startswith("http-"):
+            continue
+
+        if not f.get("url"):
+            continue
+        
+        # if there is no video with ~720p quality or higher, we'll pick first (best) available
+        if candidates and f.get("height") < 700:
+            continue
+
+        candidates.append({
+            "url": f["url"],
+            "width": f.get("width"),
+            "height": f.get("height"),
+            "bitrate": f.get("tbr", 0),
+        })
+
+    if not candidates:
+        return None
+
+    # Find best actual file under limit
+    for c in candidates:
+        size = get_content_length(c["url"])
+
+        logger.debug(f"size for {c['url']}: {size}")
+        if size is None:
+            continue
+
+        if size <= max_bytes:
+            c["size_bytes"] = size
+            c["size_mb"] = round(size / 1024 / 1024, 2)
+            return c
+
+    return candidates[-1]
+
+def pick_all_adequate_for_post(tweet_url):
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "cookies_from_browser": "firefox",
+        "proxy": "socks5://192.168.1.100:10808"
+    }
+
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(tweet_url, download=False)
+
+    if "entries" in info:
+        videos = info["entries"]
+    else:
+        videos = (info,)
+
+    return [pick_adequate_video_size(v) for v in videos]
 
 
 class TwitterScraper(BaseScraper):
@@ -49,9 +130,11 @@ class TwitterScraper(BaseScraper):
             created_at: date,
             attached_media: media_extended[],
             favorite_count: likes,
+            language: lang,
             reply_count: replies,
             retweet_count: retweets,
             text: text,
+            translated: translation,
             id: conversationID,
             name: user_name,
             screen_name: user_screen_name,
@@ -73,66 +156,32 @@ class TwitterScraper(BaseScraper):
     def _vx_scrape_tweet(url: str) -> Optional[dict]:
         """Scrape a twitter page using vxtwitter API"""
 
-        api_url = url.replace("twitter.com", "api.vxtwitter.com") + "/"
+        api_url = url.replace("twitter.com", "api.vxtwitter.com/en") + "/"
         retries = 0
         completed = False
         while not completed and retries < 5:
             res = requests.get(
                 api_url,
-                proxies={
-                    "https": config.proxy_auth_url,
-                    "http": config.proxy_auth_url,
-                },
+                #proxies={
+                #    "https": config.proxy_auth_url,
+                #    "http": config.proxy_auth_url,
+                #},
                 headers={
                     "user-agent": config.vxtwitter_user_agent,
                 },
             )
             if res.status_code == HTTPStatus.OK:
+                result_data = res.json()
+                video_media_list = [media for media in result_data["media_extended"] if media["type"] == "video"]
+                if video_media_list:
+                    adequate_video = pick_all_adequate_for_post(url)
+                for i, v_m in enumerate(video_media_list):
+                    v_m["url"] = adequate_video[i]["url"]
                 completed = True
-                return res.json()
+                return result_data
             elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
                 sleep(1)
                 retries += 1
             else:
                 return
 
-    def _get_fx_data(self, url: str):
-        name = url.split("/")[3]
-        id_ = url.split("/")[5]
-        dl_url = url.replace("twitter.com", "dl.fxtwitter.com")
-        images = []
-        previous_photo_url = ""
-        for photo_no in range(1, 5):
-            try:
-                fx_url = dl_url + "/photo/" + str(photo_no)
-                res = requests.get(
-                    fx_url,
-                    proxies={
-                        "https": config.proxy_auth_url,
-                        "http": config.proxy_auth_url,
-                    },
-                )
-                if (
-                    res.status_code == HTTPStatus.OK
-                    and res.url != fx_url
-                    and res.url != previous_photo_url
-                ):
-                    previous_photo_url = res.url
-                    images.append(res.url)
-                else:
-                    break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ):
-                break
-
-        if images:
-            return {
-                "url": url,
-                "id": id_,
-                "images": images,
-                "name": name,
-                "screen_name": "",
-                "text": "<i>Could not parse tweet...</i> ...",
-            }
