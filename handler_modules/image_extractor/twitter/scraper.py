@@ -21,6 +21,7 @@ MAX_SIZE_MB = 20
 MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
 def get_content_length(url, timeout=10):
+    logger.debug(f"Getting content length for {url}...")
     try:
         r = requests.head(
             url,
@@ -37,6 +38,7 @@ def get_content_length(url, timeout=10):
         return None
 
 def pick_adequate_video_size(info: dict, max_bytes: int = MAX_SIZE_BYTES):
+    logger.debug(f"Trying to select http- video around 720p sub {MAX_SIZE_MB}MB...")
     formats = info.get("formats", [])
     formats.sort(key=lambda x: x["tbr"], reverse=True)
     candidates = []
@@ -78,11 +80,13 @@ def pick_adequate_video_size(info: dict, max_bytes: int = MAX_SIZE_BYTES):
     return candidates[-1]
 
 def pick_all_adequate_for_post(tweet_url):
+    logger.debug(f"Trying to get all adequate video formats for {tweet_url}.")
+    
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
         "cookies_from_browser": "firefox",
-        "proxy": "socks5://192.168.1.100:10808"
+        "proxy": config.proxy_auth_url,
     }
 
     with YoutubeDL(ydl_opts) as ydl:
@@ -97,6 +101,7 @@ def pick_all_adequate_for_post(tweet_url):
 
 
 class TwitterScraper(BaseScraper):
+    @lru_cache(maxsize=30)
     def scrape(self, url: str) -> PostData | None:
         url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
@@ -118,7 +123,7 @@ class TwitterScraper(BaseScraper):
             return PostData.model_validate(converted_data)
 
     def _clean_url(self, url: str) -> str:
-        if match := re.search(r"(https://twitter.com/\w+/status/\d+).*", url):
+        if match := re.search(r"(https://x.com/\w+/status/\d+).*", url):
             url = match.group(1)
         return url
 
@@ -142,6 +147,9 @@ class TwitterScraper(BaseScraper):
         }""",
             post_data,
         )
+        
+        if result["url"].find("https://twitter.com/") >= 0:
+            result["url"] = result["url"].replace("https://twitter.com/", "https://x.com/")
 
         result["name"] = (
             f'{result["screen_name"]} ({result["name"]})'
@@ -152,20 +160,20 @@ class TwitterScraper(BaseScraper):
         return result
 
     @staticmethod
-    @lru_cache()
     def _vx_scrape_tweet(url: str) -> Optional[dict]:
         """Scrape a twitter page using vxtwitter API"""
 
-        api_url = url.replace("twitter.com", "api.vxtwitter.com/en") + "/"
+        api_url = url.replace("https://x.com", "https://api.vxtwitter.com/en") + "/"
         retries = 0
         completed = False
         while not completed and retries < 5:
             res = requests.get(
                 api_url,
-                #proxies={
-                #    "https": config.proxy_auth_url,
-                #    "http": config.proxy_auth_url,
-                #},
+                timeout=20,
+                proxies={
+                    "https": config.proxy_auth_url,
+                    "http": config.proxy_auth_url,
+                },
                 headers={
                     "user-agent": config.vxtwitter_user_agent,
                 },

@@ -32,7 +32,7 @@ def _normalize_url(url):
 
 
 def _check_is_post_link(service: str, url: str) -> bool:
-    if service == "twitter.com":
+    if service == "x.com":
         return url.find("/status/") >= 0
     elif service == "vk.com":
         if vk_scraper.pattern.findall(url):
@@ -40,9 +40,9 @@ def _check_is_post_link(service: str, url: str) -> bool:
 
 
 def select_scraper(url):
-    if "twitter.com" in url:
+    if "https://x.com" in url:
         return twitter_scraper
-    elif "vk.com" in url:
+    elif "https://vk.com" in url:
         return vk_scraper
     else:
         return None
@@ -88,11 +88,11 @@ def form_rich_html_from_post(post: PostData, caption: str) -> str:
 
 class TwitterExtractor(Handler):
     hosts = {
-        "twitter.com": "twitter.com",
-        "fxtwitter.com": "twitter.com",
-        "vxtwitter.com": "twitter.com",
-        "x.com": "twitter.com",
-        "fixupx.com": "twitter.com",
+        "twitter.com": "x.com",
+        "fxtwitter.com": "x.com",
+        "vxtwitter.com": "x.com",
+        "x.com": "x.com",
+        "fixupx.com": "x.com",
         "vk.com": "vk.com",
         "vk.ru": "vk.com",
         "m.vk.com": "vk.com",

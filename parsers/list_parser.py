@@ -439,8 +439,8 @@ class ListImporter:
 if __name__ == "__main__":
     li = ListImporter(None, None, None, None, autistic=True)
     # li.update_ani_list_status("u3m")
-    li.update_mal_list_status("Rioter")
-    #li.update_all()
+    #li.update_mal_list_status("Rioter")
+    li.update_all()
 
     # li.get_anime_season_mal()
     # li.update_seasonal()
