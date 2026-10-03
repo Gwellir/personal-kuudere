@@ -47,6 +47,7 @@ if __name__ == "__main__":
         request_kwargs={
             'connect_timeout': 30,
             'read_timeout': 300,
+            # 'proxy_url':config.proxy_auth_url,
         },
         #local_mode=True,
         # persistence=PicklePersistence("persist.pickle", store_user_data=False, store_chat_data=False, )

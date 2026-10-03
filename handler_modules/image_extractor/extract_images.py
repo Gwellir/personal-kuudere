@@ -55,20 +55,21 @@ def get_bytes(file: str | bytes) -> bytes:
         return f.read()
 
 
-def load_media_video_from_url(url: str, caption: str | None) -> InputMediaVideo:
+def load_media_from_url(url: str, media_type: str, caption: str | None) -> InputMediaVideo|InputMediaPhoto:
     tmp = tempfile.TemporaryFile("w+b")
     logger.info(f"Saving file {url}...")
     content = requests.get(
         url,
         proxies={
-            "https": config.proxy_auth_url,
-            "http": config.proxy_auth_url,
+            # "https": config.proxy_auth_url,
+            # "http": config.proxy_auth_url,
         },
     ).content
     tmp.write(content)
-    logger.info(f"Saved {len(content)} bytes into temporary file")
+    logger.info(f"Saved {len(content)} bytes into temporary file, type: {media_type}")
     tmp.seek(0)
-    result_media = InputMediaVideo(
+    wrapper = InputMediaPhoto if (media_type in ("image", "photo", MediaType.IMAGE)) else InputMediaVideo
+    result_media = wrapper(
         tmp,
         parse_mode=ParseMode.HTML,
         caption=caption,
@@ -162,12 +163,12 @@ class TwitterExtractor(Handler):
         has_video = False
         for i, media in enumerate(item.attached_media):
             wrapper = (
-                InputMediaPhoto if media.type == MediaType.IMAGE else InputMediaVideo
+                InputMediaPhoto if media.type in (MediaType.IMAGE,) else InputMediaVideo
             )
             
-            if media.type != MediaType.IMAGE:
+            if media.type not in (MediaType.IMAGE,):
                 has_video = True
-            
+                
             media_group.append(
                 wrapper(
                     media.url if not media.downloaded else get_bytes(media.downloaded),
@@ -181,7 +182,7 @@ class TwitterExtractor(Handler):
 
     def answer(self, result: list[PostData]):
         for num, item in enumerate(result):
-            if not item.attached_media:
+            if (not item.attached_media) and (item.language.lower() in ("en", "ru", "zxx", "qme")):
                 continue
 
             caption = item.get_caption(
@@ -195,59 +196,50 @@ class TwitterExtractor(Handler):
             complete = False
             tries = 0
             while not complete and tries < 10:
-                logger.info(
-                    f"Sending media group... {media_group}, {[(media.caption if hasattr(media, 'caption') else '---', media.media, media.parse_mode) for media in media_group]}"
-                )
-                try:
-                    # if group_has_video:
-                    self.chat.send_media_group(
-                        media=media_group,
-                        disable_notification=True,
-                        api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
-                    )
 
-                    # else:
-                        # caption_long = item.get_caption(
-                            # original=self.message.link,
-                            # author=self.user.full_name,
-                            # length_limit=8000,
-                        # )
-                        # logger.info(form_rich_html_from_post(item, caption_long))
-                        # r = requests.post(
-                            # f"https://api.telegram.org/bot{config.token}/sendRichMessage",
-                            # json={
-                                # "chat_id": self.chat.id,
-                                # "rich_message": {
-                                    # "html": form_rich_html_from_post(item, caption_long),
-                                # }
-                            # },
-                            # timeout=60,
-                        # )
-                        # r.raise_for_status()
-                    
+                try:
+                    if not media_group:
+                        logger.info(
+                            f"Sending TL message... {caption}"
+                        )
+                        self.chat.send_message(
+                            caption,
+                            parse_mode=ParseMode.HTML,
+                            disable_notification=True,
+                            disable_web_page_preview=True,
+                        )
+                    else:
+                        logger.info(
+                            f"Sending media group... {media_group}, {[(media.caption if hasattr(media, 'caption') else '---', media.media, media.parse_mode) for media in media_group]}"
+                        )
+                        self.chat.send_media_group(
+                            media=media_group,
+                            disable_notification=True,
+                            api_kwargs={"has_spoiler": True} if self.hidden[num] else None,
+                        )
+
                     complete = True
                 except (BadRequest, NetworkError) as exc:
                     logger.warning(exc.message)
                     tries += 1
                     logger.debug(f"Failed... try #{tries}")
 
-                    if exc.message.startswith(
-                        "urllib3 HTTPError The operation did not complete (write)"
-                    ):
+                    if exc.message.startswith("urllib3 HTTPError The operation did not complete (write)"):
                         continue
                     elif (
-                        exc.message in (
-                            'Failed to send message #1 with the error message "wrong file identifier/http url specified"',
-                            'Failed to send message #1 with the error message "webpage_media_empty"',
-                            'Failed to send message #1 with the error message "webpage_curl_failed"',
-                            'Timed out',
-                        ) or exc.message.startswith("Can't parse inputmedia: can't parse entities")
+                        (exc.message.find('with the error message "wrong file identifier/http url specified"') >= 0) or
+                        (exc.message.find('with the error message "webpage_media_empty"') >= 0) or
+                        (exc.message.find('with the error message "webpage_curl_failed"') >= 0) or
+                        (exc.message.find('Timed out') >= 0) or
+                        (exc.message.startswith("Can't parse inputmedia: can't parse entities"))
                     ):
                         complete = True
                         for i, media_item in enumerate(media_group):
-                            if isinstance(media_item.media, str) and isinstance(media_item, InputMediaVideo):
-                                media_group[i] = load_media_video_from_url(
+                            logger.warning(f"Trying to download file: {media_item.media}|{media_item.type}")
+                            if isinstance(media_item.media, str):
+                                media_group[i] = load_media_from_url(
                                     media_item.media,
+                                    media_item.type,
                                     (
                                         media_item.caption
                                         if hasattr(media_item, "caption")
@@ -256,10 +248,12 @@ class TwitterExtractor(Handler):
                                 )
                                 complete = False
                     else:
+                        if "https://x.com/" in item.url:
+                            caption = caption.replace("https://x.com/", "https://fxtwitter.com/", 1)
                         logger.error(f"Failed to send media group: {exc.message}")
                         complete = True
                         self.chat.send_message(
-                            f"<code>Не удалось загрузить медиа...</code>\n\n{caption}",
+                            f"<code>Не удалось отправить...</code>\n\n{caption}",
                             parse_mode=ParseMode.HTML,
                             disable_notification=True,
                         )

@@ -3,6 +3,7 @@ from time import sleep
 
 import requests
 
+from config import jikan_params
 
 def get_air_datetime(entry):
     if not (aired := entry.get("aired")) or not (broadcast := entry.get("broadcast")):
@@ -26,7 +27,7 @@ def get_season_from_jikan():
     season_data = []
     while True:
         jikan_season_page = requests.get(
-            f"https://api.jikan.moe/v4/seasons/now?sfw&page={page}"
+            f"{jikan_params.get('selected_base')}/seasons/now?sfw&page={page}"
         ).json()
         if page_data := jikan_season_page.get("data"):
             season_data.extend(page_data)

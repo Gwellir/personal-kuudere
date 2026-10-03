@@ -59,7 +59,11 @@ class PostData(BaseModel):
         return f"TL: {post_data.language.upper()}\n\n{post_data.translated.text}"
 
     def get_caption(self, original: str, author: str, length_limit: int = MAX_LENGTH) -> str:
-        prefix = 'Медиа из {qrt}<a href="{url}">поста</a> {name}\n'.format(
+        if not self.attached_media:
+            length_limit *= 4
+        message_type = "Медиа из" if self.attached_media else "Перевод"
+        prefix = '{message_type} {qrt}<a href="{url}">поста</a> {name}\n'.format(
+            message_type=message_type,
             url=self.url,
             name=self.name,
             qrt=(
@@ -74,7 +78,7 @@ class PostData(BaseModel):
             author=author,
         ) if original else '&gt; сообщение от {author} &lt;'.format(author=author)
         
-        to_translate_post = not (self.language in ["ru", "en"] or not self.language) and self.translated
+        to_translate_post = not (self.language in ["ru", "en", "zxx", "qme"] or not self.language) and self.translated
         self.text = strip_tags(self.text).replace("<", "&lt;").replace(">", "&gt;")
         main_text = (
             self._format_translation(self)
@@ -90,7 +94,7 @@ class PostData(BaseModel):
         if self.qrt:
             full_text = main_text
             qrt_prefix = f'\n\n<code>------------------</code>\n<i><a href="{self.qrt.url}">QRT</a> ({self.qrt.name}):</i>\n\n'
-            to_translate_qrt = not (self.qrt.language in ["ru", "en"] or not self.qrt.language) and self.qrt.translated
+            to_translate_qrt = not (self.qrt.language in ["ru", "en", "zxx", "qme"] or not self.qrt.language) and self.qrt.translated
             qrt_text = ( 
                 self._format_translation(self.qrt)
                 if to_translate_qrt

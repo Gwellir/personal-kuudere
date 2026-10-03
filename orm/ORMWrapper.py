@@ -134,8 +134,8 @@ class Anime(Base):
                 self.score,
                 (
                     (
-                        self.synopsis[:500]
-                        + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                        self.synopsis[:1500]
+                        + (" &lt;...&gt;" if len(self.synopsis) > 1500 else "")
                     )
                     if self.synopsis
                     else "[No synopsis available.]"

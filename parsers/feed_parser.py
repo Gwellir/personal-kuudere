@@ -226,7 +226,7 @@ class TorrentFeedParser:
         rss_ans = requests.get(
             rss_feed,
             timeout=(10,20),
-        #    proxies={"https": config.proxy_auth_url}
+            # proxies={"https": config.proxy_auth_url}
         )
         if not rss_ans.status_code == HTTPStatus.OK:
             FEEDPARSER_LOG.error(

@@ -10,6 +10,7 @@ from typing import Optional
 import jmespath
 import requests
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 
 import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
@@ -28,8 +29,8 @@ def get_content_length(url, timeout=10):
             allow_redirects=True,
             timeout=timeout,
             proxies={
-                "https": config.proxy_auth_url,
-                "http": config.proxy_auth_url,
+                # "https": config.proxy_auth_url,
+                # "http": config.proxy_auth_url,
             },
         )
         size = r.headers.get("Content-Length")
@@ -49,6 +50,9 @@ def pick_adequate_video_size(info: dict, max_bytes: int = MAX_SIZE_BYTES):
 
         if not f.get("url"):
             continue
+            
+        if (tag_start := f["url"].find("?")) >= 0:
+            f["url"] = f["url"][:tag_start]
         
         # if there is no video with ~720p quality or higher, we'll pick first (best) available
         if candidates and f.get("height") < 700:
@@ -86,7 +90,7 @@ def pick_all_adequate_for_post(tweet_url):
         "quiet": True,
         "no_warnings": True,
         "cookies_from_browser": "firefox",
-        "proxy": config.proxy_auth_url,
+        # "proxy": config.proxy_auth_url,
     }
 
     with YoutubeDL(ydl_opts) as ydl:
@@ -165,31 +169,37 @@ class TwitterScraper(BaseScraper):
 
         api_url = url.replace("https://x.com", "https://api.vxtwitter.com/en") + "/"
         retries = 0
-        completed = False
-        while not completed and retries < 5:
-            res = requests.get(
-                api_url,
-                timeout=20,
-                proxies={
-                    "https": config.proxy_auth_url,
-                    "http": config.proxy_auth_url,
-                },
-                headers={
-                    "user-agent": config.vxtwitter_user_agent,
-                },
-            )
-            if res.status_code == HTTPStatus.OK:
-                result_data = res.json()
-                video_media_list = [media for media in result_data["media_extended"] if media["type"] == "video"]
-                if video_media_list:
-                    adequate_video = pick_all_adequate_for_post(url)
-                for i, v_m in enumerate(video_media_list):
-                    v_m["url"] = adequate_video[i]["url"]
-                completed = True
-                return result_data
-            elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
+        while retries < 5:
+            try:
+                res = requests.get(
+                    api_url,
+                    timeout=10,
+                    proxies={
+                        # "https": config.proxy_auth_url,
+                        # "http": config.proxy_auth_url,
+                    },
+                    headers={
+                        "user-agent": config.vxtwitter_user_agent,
+                    },
+                )
+                if res.status_code == HTTPStatus.OK:
+                    result_data = res.json()
+                    video_media_list = [media for media in result_data["media_extended"] if media["type"] == "video"]
+                    if video_media_list:
+                        try:
+                            adequate_video = pick_all_adequate_for_post(url)
+                        except DownloadError:
+                            return result_data
+                    for i, v_m in enumerate(video_media_list):
+                        v_m["url"] = adequate_video[i]["url"]
+                    return result_data
+                elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
+                    sleep(1)
+                    retries += 1
+            except requests.exceptions.ReadTimeout as e:
+                logger.debug(f"Request to {api_url} timed out, retry: {retries}, sleeping")
                 sleep(1)
                 retries += 1
-            else:
-                return
+        
+        return
 
