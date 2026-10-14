@@ -1,11 +1,16 @@
+import logging
 import re
 
+from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 
 from .exceptions import CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError
 from handler_modules.base import Handler
 from orm.ORMWrapper import SeasonalVotings, Characters, Anime, VotedCharacters
+from utils.db_wrapper2 import DataInterface
+from utils.anime_lookup import AnimeLookup
 
+logger = logging.getLogger(__name__)
 
 class Nominate(Handler):
     command = "nominate"
@@ -13,6 +18,8 @@ class Nominate(Handler):
     def __init__(self, jikan):
         super().__init__()
         self.jikan = jikan
+        self.data_interface = DataInterface(self.br)
+        self.anime_lookup = AnimeLookup(self.jikan, self.data_interface)
         self._force = False
         # self.entered = []
 
@@ -27,14 +34,35 @@ class Nominate(Handler):
     def _get_char_stats(self, cid, voting):
         session = self.br.get_session()
         char = Characters.get_or_create(cid, session)
+
         if not char:
             raise CharIDNotFoundError
+        
+        # check that anime info is recent
+        is_updated: bool = False
+        for i, anime in enumerate(char.anime):
+            if (datetime.now() - anime.synced > timedelta(days=14)):
+                result = self.anime_lookup.get_anime_by_aid(anime.mal_aid)
+                is_updated = True
+                
+        if is_updated:
+            char = Characters.get_or_create(cid, session)
+        
+        logger.debug(f"Character: {char}")
         if self._force:
-            sources = sorted(
-                [anime for anime in char.anime],
-                key=lambda item: item.popularity,
-                reverse=True,
-            )
+            # force legit if legit exists
+            sources = [
+                anime
+                for anime in char.anime
+                if anime.premiered and anime.premiered.lower() == voting.season
+            ]
+            if not sources:
+                # force any
+                sources = sorted(
+                    [anime for anime in char.anime],
+                    key=lambda item: item.popularity,
+                    #reverse=True,
+                )
             source = sources[0] if sources else None
         else:
             legit_sources = [
@@ -42,6 +70,7 @@ class Nominate(Handler):
                 for anime in char.anime
                 if anime.premiered and anime.premiered.lower() == voting.season
             ]
+            logger.debug(f"Legit sources: {legit_sources}")
             # todo OVAs can have no PREMIERED parameter
             blocker_sources = [
                 anime
@@ -55,8 +84,12 @@ class Nominate(Handler):
             if not legit_sources:
                 raise NoLegitAnimeError
             if blocker_sources:
+                logger.warning(f"Blocker sources: {blocker_sources}")
                 raise AlreadyReleasedError
-            legit_sources.sort(key=lambda item: item.popularity, reverse=True)
+            legit_sources.sort(
+                key=lambda item: item.popularity, 
+                # reverse=True,
+            )
             source = legit_sources[0]
         session.close()
 
@@ -78,7 +111,8 @@ class Nominate(Handler):
             cid = int(has_cid.group(1))
             try:
                 name, source, image_url = self._get_char_stats(cid, voting)
-            except (CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError):
+            except (CharIDNotFoundError, NoLegitAnimeError, AlreadyReleasedError) as e:
+                logger.debug(repr(e))
                 return None
             if len(str_list) == 2:
                 if re.findall(r"^https?://", str_list[1]):

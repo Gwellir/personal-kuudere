@@ -182,7 +182,7 @@ class TwitterExtractor(Handler):
 
     def answer(self, result: list[PostData]):
         for num, item in enumerate(result):
-            if (not item.attached_media) and (item.language.lower() in ("en", "ru", "zxx", "qme")):
+            if (not item.attached_media) and (item.language.lower() in ("en", "ru", "zxx", "qme")) and (len(item.text) < 150):
                 continue
 
             caption = item.get_caption(

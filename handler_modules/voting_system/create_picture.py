@@ -165,7 +165,7 @@ FULL_AVATAR_V_SIZE = 280
 
 AVATAR_H_SIZE = 86
 CHAR_NAMEPLATE_HEIGHT = 48
-TITLE_NAMEPLATE_HEIGHT = 40
+TITLE_NAMEPLATE_HEIGHT = 60
 TITLE_CARD_WIDTH = 570
 
 CARD_H_AMOUNT = 6
@@ -185,10 +185,10 @@ def get_resource_cached(url: str):
     except FileNotFoundError:
         content: Response = requests.get(
             url,
-            proxies={
-                "https": config.proxy_auth_url,
-                "http": config.proxy_auth_url,
-            },
+            # proxies={
+                # "https": config.proxy_auth_url,
+                # "http": config.proxy_auth_url,
+            # },
             stream=True,
         )
         sleep(0.5)
@@ -218,9 +218,11 @@ def create_text_image(
         if multiline:
             content = ""
             words = text.split()
-            for word in words:
-                if font.getlength(content) + font.getlength(word) > AVATAR_H_SIZE - 5:
+            line_counter = 1
+            for i, word in enumerate(words):
+                if (font.getlength(content) + font.getlength(word)) > ((size[0] - 5) * line_counter) and i > 0:
                     content += "\n"
+                    line_counter += 1
                 content += word + " "
         else:
             content = text
@@ -498,6 +500,7 @@ def make_collage(title_tuples: list[tuple[str, int, str, str]], season_name: str
             font=FONT_BASIC,
             font_size=FONT_TITLE_SIZE,
             fill_color=TITLE_HEADER_COLOR,
+            multiline=True,
         )
 
         character_cards = make_char_cards_for_title(titles[title])
