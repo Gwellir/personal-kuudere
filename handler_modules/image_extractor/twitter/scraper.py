@@ -1,5 +1,7 @@
+import json 
 import logging
 import re
+import subprocess
 from functools import lru_cache
 from http import HTTPStatus
 from time import sleep
@@ -7,6 +9,8 @@ from typing import Optional
 
 import jmespath
 import requests
+from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 
 import config
 from handler_modules.image_extractor.base_scraper import BaseScraper
@@ -14,8 +18,94 @@ from handler_modules.image_extractor.models import PostData
 
 logger = logging.getLogger("handler.x_scraper")
 
+MAX_SIZE_MB = 20
+MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
+
+def get_content_length(url, timeout=10):
+    logger.debug(f"Getting content length for {url}...")
+    try:
+        r = requests.head(
+            url,
+            allow_redirects=True,
+            timeout=timeout,
+            proxies={
+                # "https": config.proxy_auth_url,
+                # "http": config.proxy_auth_url,
+            },
+        )
+        size = r.headers.get("Content-Length")
+        return int(size) if size else None
+    except Exception:
+        return None
+
+def pick_adequate_video_size(info: dict, max_bytes: int = MAX_SIZE_BYTES):
+    logger.debug(f"Trying to select http- video around 720p sub {MAX_SIZE_MB}MB...")
+    formats = info.get("formats", [])
+    formats.sort(key=lambda x: x["tbr"], reverse=True)
+    candidates = []
+
+    for f in formats:
+        if not f.get("format_id", "").startswith("http-"):
+            continue
+
+        if not f.get("url"):
+            continue
+            
+        if (tag_start := f["url"].find("?")) >= 0:
+            f["url"] = f["url"][:tag_start]
+        
+        # if there is no video with ~720p quality or higher, we'll pick first (best) available
+        if candidates and f.get("height") < 700:
+            continue
+
+        candidates.append({
+            "url": f["url"],
+            "width": f.get("width"),
+            "height": f.get("height"),
+            "bitrate": f.get("tbr", 0),
+        })
+
+    if not candidates:
+        return None
+
+    # Find best actual file under limit
+    for c in candidates:
+        size = get_content_length(c["url"])
+
+        logger.debug(f"size for {c['url']}: {size}")
+        if size is None:
+            continue
+
+        if size <= max_bytes:
+            c["size_bytes"] = size
+            c["size_mb"] = round(size / 1024 / 1024, 2)
+            return c
+
+    return candidates[-1]
+
+def pick_all_adequate_for_post(tweet_url):
+    logger.debug(f"Trying to get all adequate video formats for {tweet_url}.")
+    
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "cookies_from_browser": "firefox",
+        # "proxy": config.proxy_auth_url,
+    }
+
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(tweet_url, download=False)
+
+    if "entries" in info:
+        videos = info["entries"]
+    else:
+        videos = (info,)
+
+    return [pick_adequate_video_size(v) for v in videos]
+
 
 class TwitterScraper(BaseScraper):
+    @lru_cache(maxsize=30)
     def scrape(self, url: str) -> PostData | None:
         url = self._clean_url(url)
         post_data = self._vx_scrape_tweet(url)
@@ -37,7 +127,7 @@ class TwitterScraper(BaseScraper):
             return PostData.model_validate(converted_data)
 
     def _clean_url(self, url: str) -> str:
-        if match := re.search(r"(https://twitter.com/\w+/status/\d+).*", url):
+        if match := re.search(r"(https://x.com/\w+/status/\d+).*", url):
             url = match.group(1)
         return url
 
@@ -49,9 +139,11 @@ class TwitterScraper(BaseScraper):
             created_at: date,
             attached_media: media_extended[],
             favorite_count: likes,
+            language: lang,
             reply_count: replies,
             retweet_count: retweets,
             text: text,
+            translated: translation,
             id: conversationID,
             name: user_name,
             screen_name: user_screen_name,
@@ -59,6 +151,9 @@ class TwitterScraper(BaseScraper):
         }""",
             post_data,
         )
+        
+        if result["url"].find("https://twitter.com/") >= 0:
+            result["url"] = result["url"].replace("https://twitter.com/", "https://x.com/")
 
         result["name"] = (
             f'{result["screen_name"]} ({result["name"]})'
@@ -69,70 +164,42 @@ class TwitterScraper(BaseScraper):
         return result
 
     @staticmethod
-    @lru_cache()
     def _vx_scrape_tweet(url: str) -> Optional[dict]:
         """Scrape a twitter page using vxtwitter API"""
 
-        api_url = url.replace("twitter.com", "api.vxtwitter.com") + "/"
+        api_url = url.replace("https://x.com", "https://api.vxtwitter.com/en") + "/"
         retries = 0
-        completed = False
-        while not completed and retries < 5:
-            res = requests.get(
-                api_url,
-                proxies={
-                    "https": config.proxy_auth_url,
-                    "http": config.proxy_auth_url,
-                },
-                headers={
-                    "user-agent": config.vxtwitter_user_agent,
-                },
-            )
-            if res.status_code == HTTPStatus.OK:
-                completed = True
-                return res.json()
-            elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
-                sleep(1)
-                retries += 1
-            else:
-                return
-
-    def _get_fx_data(self, url: str):
-        name = url.split("/")[3]
-        id_ = url.split("/")[5]
-        dl_url = url.replace("twitter.com", "dl.fxtwitter.com")
-        images = []
-        previous_photo_url = ""
-        for photo_no in range(1, 5):
+        while retries < 5:
             try:
-                fx_url = dl_url + "/photo/" + str(photo_no)
                 res = requests.get(
-                    fx_url,
+                    api_url,
+                    timeout=10,
                     proxies={
-                        "https": config.proxy_auth_url,
-                        "http": config.proxy_auth_url,
+                        # "https": config.proxy_auth_url,
+                        # "http": config.proxy_auth_url,
+                    },
+                    headers={
+                        "user-agent": config.vxtwitter_user_agent,
                     },
                 )
-                if (
-                    res.status_code == HTTPStatus.OK
-                    and res.url != fx_url
-                    and res.url != previous_photo_url
-                ):
-                    previous_photo_url = res.url
-                    images.append(res.url)
-                else:
-                    break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ):
-                break
+                if res.status_code == HTTPStatus.OK:
+                    result_data = res.json()
+                    video_media_list = [media for media in result_data["media_extended"] if media["type"] == "video"]
+                    if video_media_list:
+                        try:
+                            adequate_video = pick_all_adequate_for_post(url)
+                        except DownloadError:
+                            return result_data
+                    for i, v_m in enumerate(video_media_list):
+                        v_m["url"] = adequate_video[i]["url"]
+                    return result_data
+                elif res.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR,):
+                    sleep(1)
+                    retries += 1
+            except requests.exceptions.ReadTimeout as e:
+                logger.debug(f"Request to {api_url} timed out, retry: {retries}, sleeping")
+                sleep(1)
+                retries += 1
+        
+        return
 
-        if images:
-            return {
-                "url": url,
-                "id": id_,
-                "images": images,
-                "name": name,
-                "screen_name": "",
-                "text": "<i>Could not parse tweet...</i> ...",
-            }

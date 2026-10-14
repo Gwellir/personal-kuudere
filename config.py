@@ -27,7 +27,9 @@ proxy_username = os.getenv("PROXY_USERNAME")
 proxy_password = os.getenv("PROXY_PASSWORD")
 proxy_schema = os.getenv("PROXY_SCHEMA")
 proxy_auth_url = f"{proxy_schema}://{proxy_username}:{proxy_password}@{proxy_address}"
+
 proxy_url = f"{proxy_schema}://{proxy_address}"
+#proxy_auth_url = proxy_url
 
 
 vk_token = os.getenv("VK_TOKEN")
@@ -58,7 +60,8 @@ class TimeoutRequestsSession(requests.Session):
 
 jikan_session = TimeoutRequestsSession()
 jikan_params = dict(
-    selected_base="https://api.jikan.moe/v4",
-    # selected_base="https://katou.moe/jikan/v3",
+    #selected_base="https://api.jikan.moe/v4",
+    #selected_base="http://localhost:8080/v4",
+    selected_base="https://jikan.katou.moe/v4",
     session=jikan_session,
 )

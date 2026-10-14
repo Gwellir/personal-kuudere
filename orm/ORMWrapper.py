@@ -134,8 +134,8 @@ class Anime(Base):
                 self.score,
                 (
                     (
-                        self.synopsis[:500]
-                        + (" &lt;...&gt;" if len(self.synopsis) > 500 else "")
+                        self.synopsis[:1500]
+                        + (" &lt;...&gt;" if len(self.synopsis) > 1500 else "")
                     )
                     if self.synopsis
                     else "[No synopsis available.]"
@@ -159,6 +159,11 @@ class Characters(Base):
     anime: List[Anime] = relationship(
         "Anime", secondary="anime_x_characters", backref="characters"
     )
+    
+    def __repr__(self) -> str:
+        return f"{self.name} ({self.mal_cid})"
+    
+    __str__ = __repr__
 
     @classmethod
     def get_or_create(cls, cid, session) -> Optional["Characters"]:
